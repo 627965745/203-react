@@ -53,7 +53,7 @@ const ReferenceMaterialList = () => {
             width: "10%",
             align: "center",
             render: (_, record) => (
-                <Space direction="vertical" size={2} className="w-full py-1">
+                <Space orientation="vertical" size={2} className="w-full py-1">
                     <Tag className="m-0 w-auto text-center border-none text-[10px]" color={CategoryMap[record.category]?.color}>{CategoryMap[record.category]?.label}</Tag>
                     <Tag className="m-0 w-auto text-center border-none text-[10px]" color={StageMap[record.stage]?.color}>{StageMap[record.stage]?.label}</Tag>
                     <Tag className="m-0 w-auto text-center border-none text-[10px]" color={PhysicalStateMap[record.physical_state]?.color}>{PhysicalStateMap[record.physical_state]?.label}</Tag>

@@ -21,18 +21,48 @@ const Login = () => {
     if (user) {
       navigate('/', { replace: true });
     }
-    fetchCaptcha();
   }, [user, navigate]);
+
+  useEffect(() => {
+    fetchCaptcha();
+    // Cleanup blob URL on unmount to prevent memory leaks
+    return () => {
+      if (captchaUrl && captchaUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(captchaUrl);
+      }
+    };
+  }, []);
 
   const fetchCaptcha = async () => {
     try {
-      const response = await getCaptcha();
-      if (response.data && response.data.status === 0) {
-        setCaptchaUrl(response.data.data.image);
+      // 使用 arraybuffer 以便同时处理 JSON 和图片流
+      const response = await getCaptcha({ responseType: 'arraybuffer' });
+      const contentType = response.headers['content-type'] || '';
+
+      if (contentType.includes('application/json')) {
+        // 如果是 JSON (Base64 模式)
+        const enc = new TextDecoder("utf-8");
+        const json = JSON.parse(enc.decode(response.data));
+        if (json.status === 0 && json.data?.image) {
+          setCaptchaUrl(json.data.image);
+        } else {
+          message.error('验证码加载失败');
+        }
+      } else if (contentType.includes('image')) {
+        // 如果是图片流模式，将其转为 Blob URL，这样不会产生第二次网络请求
+        const blob = new Blob([response.data], { type: contentType });
+        const url = URL.createObjectURL(blob);
+        
+        // 如果之前有旧的 blob URL，先释放掉
+        if (captchaUrl && captchaUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(captchaUrl);
+        }
+        setCaptchaUrl(url);
       } else {
         message.error('验证码加载失败');
       }
     } catch (error) {
+      console.error("Captcha fetch error:", error);
       message.error('验证码加载异常');
     }
   };
@@ -41,7 +71,7 @@ const Login = () => {
     setLoading(true);
     try {
       const response = await getLogin({
-        username: values.username,
+        name: values.username,
         password: values.password,
         captcha: values.captcha,
       });
@@ -116,7 +146,7 @@ const Login = () => {
                 onChange={(e) => setCaptchaValue(e.target.value)}
               />
               {captchaUrl && (
-                <div className="h-10 w-[120px] border border-[#d9d9d9] border-l-0 rounded-r-md overflow-hidden">
+                <div className="h-10 w-[120px] border border-[#d9d9d9] overflow-hidden">
                     <img
                         src={captchaUrl}
                         alt="captcha"

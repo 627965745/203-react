@@ -9,8 +9,6 @@ const createDummy = (name) => () => (
 
 export const ClientPage = createDummy('客户管理 (Client)');
 export const ControlPage = createDummy('菜单/权限控制 (Control)');
-export const ProcessingMethodPage = createDummy('加工方法 (ProcessingMethod)');
-export const ProcessingOptionPage = createDummy('加工选项 (ProcessingOption)');
 // export const ReferenceMaterialPage = createDummy('标准物质 (ReferenceMaterial)');
 // export const ReportCoverPage = createDummy('报告封面模板 (ReportCover)');
 // export const ReportTablePage = createDummy('报告数据表 (ReportTable)');

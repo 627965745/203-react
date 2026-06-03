@@ -9,8 +9,10 @@ import AnalysisTypePage from './pages/AnalysisType';
 import DepartmentPage from './pages/Department';
 import DevicePage from './pages/Device';
 import DeviceCategoryPage from './pages/DeviceCategory';
+import ProcessingMethodPage from './pages/ProcessingMethod';
 import ReagentPage from './pages/Reagent';
 import ReagentStoragePage from './pages/ReagentStorage';
+import ReagentStockPage from './pages/ReagentStock';
 import ReferenceMaterialPage from './pages/ReferenceMaterial';
 import ReportCoverPage from './pages/ReportCover';
 import ReportTablePage from './pages/ReportTable';
@@ -20,11 +22,19 @@ import TestCategoryPage from './pages/TestCategory';
 import TestItemPage from './pages/TestItem';
 import TestMethodPage from './pages/TestMethod';
 import UserPage from './pages/User';
+import LogPage from './pages/Log';
+import WorkflowTaskPage from './pages/WorkflowManager/Task';
+import WorkflowSamplePage from './pages/WorkflowManager/Sample';
+import DepartmentSamplePage from './pages/DepartmentManager/Sample';
+import TestingSamplePage from './pages/TestingManager/Sample';
+import TestingSampleHelperPage from './pages/TestingManager/SampleHelper';
+import ThermometerPage from './pages/MonitorAdmin/Thermometer';
+
+import ProcessingManagerPage from './pages/ProcessingManager';
+import ReferenceMaterialMediumTypePage from './pages/ReferenceMaterialMediumType';
+import ControlPage from './pages/Control';
 import {
   AdminHome,
-  ControlPage,
-  ProcessingMethodPage,
-  ProcessingOptionPage,
   ResetPasswordPage
 } from './pages/DummyPages';
 
@@ -53,18 +63,28 @@ const App = () => {
             <Route path="Device" element={<DevicePage />} />
             <Route path="DeviceCategory" element={<DeviceCategoryPage />} />
             <Route path="ProcessingMethod" element={<ProcessingMethodPage />} />
-            <Route path="ProcessingOption" element={<ProcessingOptionPage />} />
             <Route path="Reagent" element={<ReagentPage />} />
             <Route path="ReagentStorage" element={<ReagentStoragePage />} />
+            <Route path="ReagentStock" element={<ReagentStockPage />} />
             <Route path="ReferenceMaterial" element={<ReferenceMaterialPage />} />
+            <Route path="ReferenceMaterialMediumType" element={<ReferenceMaterialMediumTypePage />} />
             <Route path="ReportCover" element={<ReportCoverPage />} />
             <Route path="ReportTable" element={<ReportTablePage />} />
-            <Route path="Role" element={<RolePage />} />
             <Route path="TaskType" element={<TaskTypePage />} />
+            <Route path="/workflowTask" element={<WorkflowTaskPage />} />
+            <Route path="/ProcessingManager" element={<ProcessingManagerPage />} />
+            <Route path="/workflowSample" element={<WorkflowSamplePage />} />
+            <Route path="/departmentManager" element={<DepartmentSamplePage />} />
+            <Route path="/testingManager" element={<TestingSamplePage />} />
+            <Route path="/testingSampleHelper" element={<TestingSampleHelperPage />} />
+            <Route path="/monitorThermometer" element={<ThermometerPage />} />
+
             <Route path="TestCategory" element={<TestCategoryPage />} />
             <Route path="TestItem" element={<TestItemPage />} />
             <Route path="TestMethod" element={<TestMethodPage />} />
+            <Route path="Role" element={<RolePage />} />
             <Route path="User" element={<UserPage />} />
+            <Route path="Log" element={<LogPage />} />
           </Route>
 
           <Route

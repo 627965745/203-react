@@ -1,15 +1,43 @@
 import React, { useState } from "react";
-import { Switch, message, Tooltip, Tag } from "antd";
+import { Switch, message, Tooltip, Tag, Button, Modal, Form, Input, DatePicker } from "antd";
+import { SafetyCertificateOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
+import { useAuth } from "../../contexts/AuthContext";
 import CrudTable from "../../components/CrudTable";
-import { readDevice, createDevice, updateDevice, deleteDevice } from "../../api/device";
+import { readDevice, createDevice, updateDevice, deleteDevice, calibrateDevice } from "../../api/device";
 import AddEdit from './AddEdit';
 
 const DeviceList = () => {
+    const { user } = useAuth();
     // We can use a unique key to force CrudTable to reload if needed, 
     // but usually updating the record locally is enough if we don't want a full reload.
     // In this case, since CrudTable manages its own state 'data', 
     // the cleanest way to refresh after an out-of-table update is to trigger the reload.
     const [refreshKey, setRefreshKey] = useState(0);
+    const [calibrateModal, setCalibrateModal] = useState({ visible: false, record: null });
+    const [form] = Form.useForm();
+
+    const handleCalibrate = async (values) => {
+        try {
+            const payload = {
+                ...values,
+                device_id: calibrateModal.record.id,
+                calibrator: user?.nickname || user?.name || "未知用户",
+                calibrated_at: values.calibrated_at.format("YYYY-MM-DD")
+            };
+            const response = await calibrateDevice(payload);
+            if (response.data.status === 0 || response.data.code === 0) {
+                message.success("设备校准记录已添加");
+                setCalibrateModal({ visible: false, record: null });
+                form.resetFields();
+                setRefreshKey(prev => prev + 1);
+            } else {
+                message.error(response.data?.message || "校准提交失败");
+            }
+        } catch (error) {
+            message.error("提交异常");
+        }
+    };
 
     const handleEnableToggle = async (record, checked) => {
         try {
@@ -126,11 +154,12 @@ const DeviceList = () => {
         commissioned_at: null,
         calibration_interval: 365,
         maintainer_id: null,
-        notes: "",
+        description: "",
         enabled: 1 // Default to enabled when creating
     };
 
     return (
+        <>
         <CrudTable
             key={refreshKey} // Force reload when refreshKey changes
             title="设备管理"
@@ -141,22 +170,80 @@ const DeviceList = () => {
             initialValues={initialValues}
             modalWidth={800}
             renderExpandedRow={(record) => (
-                <div className="p-4 bg-gray-50 rounded border border-gray-100 flex gap-12">
-                   <div>
-                       <div className="text-gray-400 text-xs mb-1">出厂编号</div>
-                       <div className="text-sm">{record.factory_code || '暂无'}</div>
-                   </div>
-                   <div>
-                       <div className="text-gray-400 text-xs mb-1">校准周期</div>
-                       <div className="text-sm">{record.calibration_interval} 天</div>
-                   </div>
-                   <div className="flex-1">
-                       <div className="text-gray-400 text-xs mb-1">备注</div>
-                       <div className="text-sm whitespace-pre-wrap">{record.notes || '无'}</div>
-                   </div>
+                <div className="p-4 bg-gray-50 rounded border border-gray-100 flex flex-col gap-4">
+                    <div className="flex gap-12">
+                        <div>
+                            <div className="text-gray-400 text-xs mb-1">出厂编号</div>
+                            <div className="text-sm">{record.factory_code || '暂无'}</div>
+                        </div>
+                        <div>
+                            <div className="text-gray-400 text-xs mb-1">校准周期</div>
+                            <div className="text-sm">{record.calibration_interval} 天</div>
+                        </div>
+                        <div className="flex-1">
+                            <div className="text-gray-400 text-xs mb-1">备注</div>
+                            <div className="text-sm whitespace-pre-wrap">{record.description || '无'}</div>
+                        </div>
+                    </div>
+                    {record.calibration_logs && record.calibration_logs.length > 0 && (
+                        <div className="pt-2 border-t border-gray-200">
+                            <div className="text-gray-400 text-xs mb-2 italic">最近校准记录:</div>
+                            <div className="flex flex-wrap gap-2">
+                                {record.calibration_logs.slice(0, 5).map((log, idx) => (
+                                    <Tag key={idx} className="m-0 bg-white border-gray-200 text-[10px]">
+                                        {log.calibrated_at} ({log.calibrator})
+                                    </Tag>
+                                ))}
+                                {record.calibration_logs.length > 5 && <span className="text-gray-300 text-[10px]">...</span>}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
+            renderActions={(record) => (
+                <Button 
+                    type="link" 
+                    size="small" 
+                    icon={<SafetyCertificateOutlined />} 
+                    onClick={() => setCalibrateModal({ visible: true, record })}
+                >
+                    校准
+                </Button>
+            )}
         />
+        
+        <Modal
+            title={`设备校准 - ${calibrateModal.record?.name}`}
+            open={calibrateModal.visible}
+            onCancel={() => setCalibrateModal({ visible: false, record: null })}
+            onOk={() => form.submit()}
+            okText="确认校准"
+            cancelText="取消"
+            width={380} // Smaller size
+            destroyOnHidden
+        >
+            <Form
+                form={form}
+                layout="vertical"
+                onFinish={handleCalibrate}
+                initialValues={{ 
+                    calibrated_at: dayjs()
+                }}
+                className="pt-4"
+            >
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded text-blue-600 text-sm">
+                    <strong>校准执行人:</strong> {user?.nickname || user?.name || "未知用户"}
+                </div>
+                <Form.Item
+                    name="calibrated_at"
+                    label="校准执行日期"
+                    rules={[{ required: true, message: '请选择校准日期' }]}
+                >
+                    <DatePicker className="w-full" />
+                </Form.Item>
+            </Form>
+        </Modal>
+    </>
     );
 };
 

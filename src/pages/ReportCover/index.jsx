@@ -1,11 +1,23 @@
-import React from "react";
+import React, { useState, useMemo, useCallback } from "react";
+import { Button } from "antd";
+import { FileWordOutlined, SettingOutlined } from "@ant-design/icons";
 import CrudTable from "../../components/CrudTable";
 import { readReportCover, createReportCover, updateReportCover, deleteReportCover } from "../../api/reportCover";
 import AddEdit from './AddEdit';
-import { FileWordOutlined } from "@ant-design/icons";
+import FieldDrawer from './FieldDrawer';
 
 const ReportCoverList = () => {
-    const columns = [
+    const [drawerVisible, setDrawerVisible] = useState(false);
+    const [drawerCover, setDrawerCover] = useState(null);
+    const [refreshKey, setRefreshKey] = useState(0);
+    const [covers, setCovers] = useState([]);
+
+    const handleManageFields = useCallback((record) => {
+        setDrawerCover(record);
+        setDrawerVisible(true);
+    }, []);
+
+    const columns = useMemo(() => [
         {
             title: "序号",
             dataIndex: "id",
@@ -36,29 +48,53 @@ const ReportCoverList = () => {
             ellipsis: true,
             render: (text) => text || <span className="text-gray-300 italic">暂无描述</span>
         }
-    ];
+    ], []);
 
-    const initialValues = {
+    const api = useMemo(() => ({
+        read: readReportCover,
+        create: createReportCover,
+        update: updateReportCover,
+        delete: deleteReportCover
+    }), []);
+
+    const initialValues = useMemo(() => ({
         name: "",
         template_file: "",
         description: ""
-    };
+    }), []);
+
+    const renderActions = useCallback((record) => (
+        <Button 
+            type="link" 
+            size="small" 
+            onClick={() => handleManageFields(record)}
+            icon={<SettingOutlined className="text-purple-500" />}
+        >
+            字段管理
+        </Button>
+    ), [handleManageFields]);
 
     return (
-        <CrudTable
-            title="报告封面模板管理"
-            entityName="模板"
-            columns={columns}
-            api={{
-                read: readReportCover,
-                create: createReportCover,
-                update: updateReportCover,
-                delete: deleteReportCover
-            }}
-            AddEditForm={AddEdit}
-            initialValues={initialValues}
-            modalWidth={600}
-        />
+        <>
+            <CrudTable
+                refreshKey={refreshKey}
+                title="报告封面模板管理"
+                entityName="模板"
+                columns={columns}
+                api={api}
+                AddEditForm={AddEdit}
+                initialValues={initialValues}
+                modalWidth={600}
+                renderActions={renderActions}
+                onDataLoaded={setCovers}
+            />
+            <FieldDrawer
+                visible={drawerVisible}
+                onClose={() => setDrawerVisible(false)}
+                cover={covers.find(c => c.id === drawerCover?.id)}
+                onSuccess={() => setRefreshKey(prev => prev + 1)}
+            />
+        </>
     );
 };
 

@@ -1,14 +1,31 @@
-import React from "react";
+import { useState, useMemo } from "react";
 import CrudTable from "../../components/CrudTable";
 import { readRole, createRole, updateRole, deleteRole } from "../../api/role";
 import AddEdit from './AddEdit';
-import { UserOutlined, ClockCircleOutlined, NumberOutlined } from "@ant-design/icons";
-import { Tag, Typography } from "antd";
+import ArrangeModal from './ArrangeModal';
+import MenuArrangeModal from './MenuArrangeModal';
+import { UserOutlined, ClockCircleOutlined, NumberOutlined, LinkOutlined, ControlOutlined } from "@ant-design/icons";
+import { Tag, Typography, Button, Space, Tooltip } from "antd";
 
 const { Text } = Typography;
 
 const RoleList = () => {
-    const columns = [
+    const [arrangeVisible, setArrangeVisible] = useState(false);
+    const [menuArrangeVisible, setMenuArrangeVisible] = useState(false);
+    const [arrangeRecord, setArrangeRecord] = useState(null);
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    const handleManageUsers = (record) => {
+        setArrangeRecord(record);
+        setArrangeVisible(true);
+    };
+
+    const handleManageMenus = (record) => {
+        setArrangeRecord(record);
+        setMenuArrangeVisible(true);
+    };
+
+    const columns = useMemo(() => [
         {
             title: "序号",
             dataIndex: "id",
@@ -18,7 +35,7 @@ const RoleList = () => {
         {
             title: "角色名称",
             dataIndex: "name",
-            width: "30%",
+            width: "20%",
             render: (text) => (
                 <div className="flex items-center gap-2">
                     <UserOutlined className="text-indigo-500" />
@@ -29,7 +46,7 @@ const RoleList = () => {
         {
             title: "权限位 (bitwise)",
             dataIndex: "bitwise",
-            width: "20%",
+            width: "10%",
             render: (val) => (
                 <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
@@ -43,9 +60,43 @@ const RoleList = () => {
             )
         },
         {
+            title: "包含用户",
+            dataIndex: "users",
+            width: "15%",
+            render: (users) => (
+                <div className="flex flex-wrap gap-1">
+                    {users?.map(u => (
+                        <Tooltip key={u.id} title={`生效于: ${u.created_at || '未知'}`}>
+                            <Tag color="blue" className="m-0 text-[10px] leading-[16px]">
+                                {u.nickname || u.name}
+                            </Tag>
+                        </Tooltip>
+                    ))}
+                    {(!users || users.length === 0) && <span className="text-gray-300 italic text-[11px]">暂无</span>}
+                </div>
+            )
+        },
+        {
+            title: "菜单权限",
+            dataIndex: "controls",
+            width: "15%",
+            render: (controls) => (
+                <div className="flex flex-wrap gap-1">
+                    {controls?.map(c => (
+                        <Tooltip key={c.id} title={`生效于: ${c.created_at || '未知'}`}>
+                            <Tag color="cyan" className="m-0 text-[10px] leading-[16px]">
+                                {c.name}
+                            </Tag>
+                        </Tooltip>
+                    ))}
+                    {(!controls || controls.length === 0) && <span className="text-gray-300 italic text-[11px]">未授权</span>}
+                </div>
+            )
+        },
+        {
             title: "创建时间",
             dataIndex: "created_at",
-            width: "20%",
+            width: "15%",
             render: (text) => (
                 <div className="flex flex-col text-xs text-gray-500">
                     <div className="flex items-center gap-1">
@@ -59,7 +110,7 @@ const RoleList = () => {
         {
             title: "更新时间",
             dataIndex: "updated_at",
-            width: "20%",
+            width: "15%",
             render: (text) => (
                 <div className="flex flex-col text-xs text-gray-500">
                     <div className="flex items-center gap-1">
@@ -70,28 +121,65 @@ const RoleList = () => {
                 </div>
             )
         }
-    ];
+    ], []);
 
-    const initialValues = {
+    const api = useMemo(() => ({
+        read: readRole,
+        create: createRole,
+        update: updateRole,
+        delete: deleteRole
+    }), []);
+
+    const initialValues = useMemo(() => ({
         name: "",
         bitwise: 0
-    };
+    }), []);
 
     return (
+        <>
         <CrudTable
+            key={refreshKey}
             title="角色管理"
             entityName="角色"
             columns={columns}
-            api={{
-                read: readRole,
-                create: createRole,
-                update: updateRole,
-                delete: deleteRole
-            }}
+            api={api}
             AddEditForm={AddEdit}
             initialValues={initialValues}
             modalWidth={500}
+            renderActions={(record) => (
+                <>
+                    <Button 
+                        type="link" 
+                        size="small" 
+                        onClick={() => handleManageUsers(record)}
+                        icon={<LinkOutlined className="text-indigo-500" />}
+                    >
+                        分配用户
+                    </Button>
+                    <Button 
+                        type="link" 
+                        size="small" 
+                        onClick={() => handleManageMenus(record)}
+                        icon={<ControlOutlined className="text-purple-500" />}
+                    >
+                        关联菜单
+                    </Button>
+                </>
+            )}
         />
+        <ArrangeModal
+            visible={arrangeVisible}
+            onClose={() => setArrangeVisible(false)}
+            record={arrangeRecord}
+            onSuccess={() => setRefreshKey(prev => prev + 1)}
+        />
+        <MenuArrangeModal
+            visible={menuArrangeVisible}
+            onClose={() => setMenuArrangeVisible(false)}
+            record={arrangeRecord}
+            onSuccess={() => setRefreshKey(prev => prev + 1)}
+        />
+        </>
     );
 };
 

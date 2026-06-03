@@ -11,16 +11,34 @@ import AddEdit from './AddEdit';
 const DepartmentList = () => {
     const columns = [
         {
+            title: "序号",
+            dataIndex: "id",
+            key: "id",
+            width: "8%",
+            align: "center",
+            render: (text) => <span className="text-gray-400 font-mono text-xs">{text}</span>
+        },
+        {
             title: "部门名称",
             dataIndex: "name",
             key: "name",
+            render: (text) => <span className="font-bold text-blue-600">{text}</span>
         },
         {
-            title: "ID",
-            dataIndex: "id",
-            key: "id",
-            width: "15%",
-            align: "center"
+            title: "创建时间",
+            dataIndex: "created_at",
+            key: "created_at",
+            width: "18%",
+            align: "center",
+            render: (text) => <span className="text-gray-400 text-xs">{text || '-'}</span>
+        },
+        {
+            title: "更新时间",
+            dataIndex: "updated_at",
+            key: "updated_at",
+            width: "18%",
+            align: "center",
+            render: (text) => <span className="text-gray-400 text-xs">{text || '-'}</span>
         }
     ];
 
@@ -33,7 +51,7 @@ const DepartmentList = () => {
 
     return (
         <CrudTable
-            title="部门科室管理"
+            title="部门/科室管理"
             entityName="部门"
             columns={columns}
             api={api}
@@ -42,7 +60,8 @@ const DepartmentList = () => {
             modalWidth={500}
             tableProps={{
                 expandable: {
-                    defaultExpandAllRows: true
+                    defaultExpandAllRows: true,
+                    expandIconColumnIndex: 1
                 }
             }}
         />

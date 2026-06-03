@@ -15,35 +15,29 @@ export const stringifyData = (data) => {
 
 const instance = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || "",
-    timeout: 10000, // Based on old Vue default config
+    timeout: 10000,
     headers: {
         Accept: "application/json, text/plain, */*",
-        "Content-Type": "application/json", // Keeping JSON since old Vue mostly used it
+        "Content-Type": "application/json",
         "X-Requested-With": "XMLHttpRequest"
     },
-    // No withCredentials here since original Vue project relied on manually passing token,
-    // Unless you explicitly switch to cookies later. Let's keep the manual headers for now to ensure backend works.
+    withCredentials: true
 });
 
 // Request interceptor mimicking older Vue logic but dropping Pinia class-wrapper bloat
 instance.interceptors.request.use(
     (config) => {
-        /** Login whitelist */
-        const whiteList = ["/manage/common/login"];
-        if (whiteList.includes(config.url)) {
-            return config;
+        // 确保非 GET 请求始终带有 Content-Type
+        if (config.method !== 'get') {
+            if (!config.headers['Content-Type']) {
+                config.headers['Content-Type'] = 'application/json';
+            }
+            // 如果是 POST/PUT 等请求但没有数据，强制设置为空对象 {}
+            // 否则 Axios 会因为没有 Body 而不发送 Content-Type
+            if (config.data === undefined || config.data === null) {
+                config.data = {};
+            }
         }
-
-        // Simpler status management: replacing Pinia with simple Auth context/ localStorage fallback
-        const token = localStorage.getItem('token');
-        const timestamp = localStorage.getItem('timestamp');
-        
-        if (token) {
-            config.headers["token"] = token;
-            config.headers["timestamp"] = timestamp || Date.now();
-            config.headers["sign"] = "sign"; // Following old Vue logic mock 
-        }
-
         return config;
     },
     (error) => {
@@ -54,6 +48,11 @@ instance.interceptors.request.use(
 // Response interceptor
 instance.interceptors.response.use(
     (response) => {
+        // If status is not present, it's likely a direct resource (e.g. image) or a different format
+        if (response.data.status === undefined) {
+            return response;
+        }
+
         const { status, message: msg } = response.data;
         
         if (status === 0) {
@@ -61,7 +60,9 @@ instance.interceptors.response.use(
             return response;
         } else if (status === 11) { 
             const errorMsg = msg || '用户组不匹配（无权限）';
-            message.error(errorMsg);
+            if (!response.config?._silent) {
+                message.error(errorMsg);
+            }
             return Promise.reject(new Error(errorMsg));
         } else if (status === 101) {
             const errorMsg = msg || '数据库无改动';
@@ -69,6 +70,10 @@ instance.interceptors.response.use(
             return Promise.reject(new Error(errorMsg));
         } else if (status === 102) {
             const errorMsg = msg || '数据库无改动（User.update专用）';
+            message.warning(errorMsg);
+            return Promise.reject(new Error(errorMsg));
+        } else if (status === 103) {
+            const errorMsg = msg || '数据库无改动（ReferenceMaterial.prepare专用）';
             message.warning(errorMsg);
             return Promise.reject(new Error(errorMsg));
         } else if (status === -1) {
@@ -79,7 +84,10 @@ instance.interceptors.response.use(
         } else {
             // Other generic errors
             const errorMsg = msg || '发生未知错误，请稍后重试';
-            message.error(errorMsg);
+            // Allow opting out of global error messages via config._silent
+            if (!response.config?._silent) {
+                message.error(errorMsg);
+            }
             return Promise.reject(new Error(errorMsg));
         }
     },

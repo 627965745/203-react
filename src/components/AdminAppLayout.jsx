@@ -79,25 +79,35 @@ const AdminAppLayout = () => {
 
     const sidebarComponent = useMemo(() => {
         const menuItems = [
-            { key: "AnalysisType", label: "分析类型" },
-            { key: "Client", label: "客户管理" },
-            { key: "Control", label: "菜单/权限控制" },
-            { key: "Department", label: "部门/科室" },
-            { key: "Device", label: "设备管理" },
-            { key: "DeviceCategory", label: "设备分类" },
-            { key: "ProcessingMethod", label: "加工方法" },
-            { key: "ProcessingOption", label: "加工选项" },
-            { key: "Reagent", label: "试剂管理" },
-            { key: "ReagentStorage", label: "试剂柜管理" },
-            { key: "ReferenceMaterial", label: "标准物质" },
-            { key: "ReportCover", label: "报告封面模板" },
-            { key: "ReportTable", label: "报告数据表" },
-            { key: "Role", label: "角色管理" },
-            { key: "TaskType", label: "任务类型" },
-            { key: "TestCategory", label: "检测类别" },
-            { key: "TestItem", label: "检测项目" },
-            { key: "TestMethod", label: "检测方法" },
-            { key: "User", label: "用户管理" }
+            { key: "AnalysisType", label: <Link to="/AnalysisType">分析类型</Link> },
+            { key: "Client", label: <Link to="/Client">客户管理</Link> },
+            { key: "Control", label: <Link to="/Control">菜单/权限控制</Link> },
+            { key: "Department", label: <Link to="/Department">部门/科室</Link> },
+            { key: "Device", label: <Link to="/Device">设备管理</Link> },
+            { key: "DeviceCategory", label: <Link to="/DeviceCategory">设备分类</Link> },
+            { key: "ProcessingMethod", label: <Link to="/ProcessingMethod">加工方法</Link> },
+            { key: "Reagent", label: <Link to="/Reagent">试剂管理</Link> },
+            { key: "ReagentStorage", label: <Link to="/ReagentStorage">试剂柜管理</Link> },
+            { key: "ReagentStock", label: <Link to="/ReagentStock">试剂库存明细</Link> },
+            { key: "ReferenceMaterial", label: <Link to="/ReferenceMaterial">标准物质</Link> },
+            { key: "ReferenceMaterialMediumType", label: <Link to="/ReferenceMaterialMediumType">介质类型</Link> },
+            { key: "ReportCover", label: <Link to="/ReportCover">报告封面模板</Link> },
+            { key: "ReportTable", label: <Link to="/ReportTable">报告数据表</Link> },
+            { key: "TaskType", label: <Link to="/TaskType">任务类型</Link> },
+            { key: "workflowTask", label: <Link to="/workflowTask">任务管理</Link> },
+            { key: "ProcessingManager", label: <Link to="/ProcessingManager">加工任务管理</Link> },
+            { key: "workflowSample", label: <Link to="/workflowSample">样品管理</Link> },
+            { key: "departmentManager", label: <Link to="/departmentManager">科室任务管理</Link> },
+            { key: "testingManager", label: <Link to="/testingManager">检测任务管理</Link> },
+            { key: "testingSampleHelper", label: <Link to="/testingSampleHelper">辅助检测管理</Link> },
+            { key: "monitorThermometer", label: <Link to="/monitorThermometer">温湿度计管理</Link> },
+
+            { key: "TestCategory", label: <Link to="/TestCategory">检测类别</Link> },
+            { key: "TestItem", label: <Link to="/TestItem">检测项目</Link> },
+            { key: "TestMethod", label: <Link to="/TestMethod">检测方法</Link> },
+            { key: "Role", label: <Link to="/Role">角色管理</Link> },
+            { key: "User", label: <Link to="/User">用户管理</Link> },
+            { key: "Log", label: <Link to="/Log">操作日志</Link> }
         ];
 
         return (
@@ -106,10 +116,6 @@ const AdminAppLayout = () => {
                     mode="inline"
                     selectedKeys={[selectedKey]}
                     className="border-r-0"
-                    onSelect={({ key }) => {
-                        setSelectedKey(key);
-                        navigate(`/${key}`);
-                    }}
                     items={menuItems}
                 />
             </div>
@@ -164,7 +170,7 @@ const AdminAppLayout = () => {
                 >
                     <div className="flex min-h-full">
                         {sidebarComponent}
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                             <Outlet />
                         </div>
                     </div>

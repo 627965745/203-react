@@ -3,14 +3,15 @@ import CrudTable from "../../components/CrudTable";
 import { readUser, createUser, updateUser, deleteUser, resetUser } from "../../api/user";
 import { comboDepartment } from "../../api/department";
 import AddEdit from './AddEdit';
+import ArrangeModal from './ArrangeModal';
 import { 
     UserOutlined, 
     EnvironmentOutlined, 
-    SafetyCertificateOutlined, 
     KeyOutlined, 
     GlobalOutlined, 
     ClockCircleOutlined,
-    FileImageOutlined
+    FileImageOutlined,
+    LinkOutlined
 } from "@ant-design/icons";
 import { Tag, Switch, message, Select, Space, Button, Modal, Spin, Empty, Descriptions } from "antd";
 
@@ -20,6 +21,14 @@ const UserList = () => {
     const [loading, setLoading] = useState(true);
     const [refreshKey, setRefreshKey] = useState(0);
 
+    const [arrangeVisible, setArrangeVisible] = useState(false);
+    const [arrangeRecord, setArrangeRecord] = useState(null);
+
+    const handleManageRoles = (record) => {
+        setArrangeRecord(record);
+        setArrangeVisible(true);
+    };
+
     useEffect(() => {
         const fetchDepts = async () => {
             setLoading(true);
@@ -28,9 +37,6 @@ const UserList = () => {
                 if (res.data.status === 0 || res.data.code === 0) {
                     const data = res.data.data || [];
                     setDepartments(data);
-                    if (data.length > 0 && !deptId) {
-                        setDeptId(data[0].id);
-                    }
                 }
             } finally {
                 setLoading(false);
@@ -41,8 +47,9 @@ const UserList = () => {
 
     const api = useMemo(() => ({
         read: (params) => {
-            if (!deptId) return Promise.resolve({ data: { status: 0, data: { rows: [], total: 0 } } });
-            return readUser({ ...params, department_id: deptId });
+            const query = { ...params };
+            if (deptId) query.department_id = deptId;
+            return readUser(query);
         },
         create: createUser,
         update: updateUser,
@@ -76,7 +83,6 @@ const UserList = () => {
 
     const handleSwitchEnabled = async (record, checked) => {
         try {
-            // Re-use update API to change enabled status
             const payload = { ...record, enabled: checked ? 1 : 0 };
             const res = await updateUser(payload);
             if (res.data.status === 0 || res.data.code === 0) {
@@ -90,7 +96,7 @@ const UserList = () => {
         }
     };
 
-    const columns = [
+    const columns = useMemo(() => [
         {
             title: "序号",
             dataIndex: "id",
@@ -130,10 +136,25 @@ const UserList = () => {
             title: "实名/证件/联系",
             width: "25%",
             render: (_, record) => (
-                <div className="text-xs">
-                    <div><span className="text-gray-400">实名:</span> {record.id_name || "-"}</div>
-                    <div><span className="text-gray-400">证件:</span> {record.id_number || "-"}</div>
+                <div className="text-[11px] leading-tight">
+                    <div className="mb-0.5"><span className="text-gray-400">实名:</span> {record.id_name || "-"}</div>
+                    <div className="mb-0.5"><span className="text-gray-400">证件:</span> {record.id_number || "-"}</div>
                     <div><span className="text-gray-400">联系:</span> {record.contact || "-"}</div>
+                </div>
+            )
+        },
+        {
+            title: "拥有角色",
+            dataIndex: "roles",
+            width: "20%",
+            render: (roles) => (
+                <div className="flex flex-wrap gap-1">
+                    {roles?.map(r => (
+                        <Tag color="cyan" key={r.id} className="m-0 text-[10px] leading-[16px]">
+                            {r.name}
+                        </Tag>
+                    ))}
+                    {(!roles || roles.length === 0) && <span className="text-gray-300 italic text-[11px]">暂无</span>}
                 </div>
             )
         },
@@ -149,28 +170,26 @@ const UserList = () => {
                     onChange={(checked) => handleSwitchEnabled(record, checked)}
                 />
             )
-        },
-        {
-            title: "密码重置",
-            width: "10%",
-            align: "center",
-            render: (_, record) => (
-                <Button 
-                    type="link" 
-                    size="small" 
-                    icon={<KeyOutlined />}
-                    onClick={() => handleResetPassword(record)}
-                >
-                    重置
-                </Button>
-            )
         }
-    ];
+    ], []);
+
+    const initialValues = useMemo(() => ({
+        department_id: deptId,
+        nickname: "",
+        name: "",
+        password: "",
+        id_name: "",
+        id_number: "",
+        contact: "",
+        signature_file: "",
+        is_manager: 0,
+        enabled: 1
+    }), [deptId]);
 
     const renderExpandedRow = (record) => (
         <div className="p-4 bg-gray-50 rounded-lg">
             <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                <SafetyCertificateOutlined /> 额外详情内容
+                额外详情内容
             </h4>
             <Descriptions size="small" bordered column={3}>
                 <Descriptions.Item label="签名文件" span={3}>
@@ -197,23 +216,8 @@ const UserList = () => {
         </div>
     );
 
-    if (loading && !departments.length) {
-        return (
-            <div className="flex justify-center items-center h-64 bg-white rounded-lg">
-                <Spin description="加载部门..." size="large" />
-            </div>
-        );
-    }
-
-    if (!loading && !departments.length) {
-        return (
-            <div className="p-8 bg-white rounded-lg text-center">
-                <Empty description="请先添加部门" />
-            </div>
-        );
-    }
-
     return (
+        <>
         <CrudTable
             key={refreshKey}
             title="用户管理"
@@ -222,15 +226,34 @@ const UserList = () => {
             api={api}
             AddEditForm={AddEdit}
             renderExpandedRow={renderExpandedRow}
-            initialValues={{
-                department_id: deptId,
-                is_manager: 0,
-                enabled: 1
-            }}
+            renderActions={(record) => (
+                <Space size="small">
+                    <Button 
+                        type="link" 
+                        size="small" 
+                        icon={<LinkOutlined className="text-indigo-500" />}
+                        onClick={() => handleManageRoles(record)}
+                    >
+                        关联角色
+                    </Button>
+                    <Button 
+                        type="link" 
+                        size="small" 
+                        icon={<KeyOutlined />}
+                        onClick={() => handleResetPassword(record)}
+                    >
+                        重置密码
+                    </Button>
+                </Space>
+            )}
+            initialValues={initialValues}
             modalWidth={700}
+            filterValues={{ department_id: deptId }}
+            filterConfig={{ department_id: { label: "部门", options: departments.map(d => ({ label: d.name, value: d.id })) } }}
+            onClearFilter={() => { setDeptId(null); setRefreshKey(prev => prev + 1); }}
+            onClearAll={() => { setDeptId(null); setRefreshKey(prev => prev + 1); }}
             formatPayload={(payload, mode) => {
                 const newPayload = { ...payload };
-                // On update, if password is empty string, remove it to avoid overwriting or validation error
                 if (mode === 'update' && !newPayload.password) {
                     delete newPayload.password;
                 }
@@ -240,11 +263,12 @@ const UserList = () => {
                 <Space>
                     <span className="text-gray-500 text-sm">部门筛选:</span>
                     <Select
+                        loading={loading}
                         style={{ width: 220 }}
                         placeholder="请选择部门"
                         value={deptId}
                         onChange={(val) => {
-                            setDeptId(val);
+                            setDeptId(val || null);
                             setRefreshKey(prev => prev + 1);
                         }}
                         options={departments.map(d => ({ label: d.name, value: d.id }))}
@@ -252,6 +276,13 @@ const UserList = () => {
                 </Space>
             }
         />
+        <ArrangeModal
+            visible={arrangeVisible}
+            onClose={() => setArrangeVisible(false)}
+            record={arrangeRecord}
+            onSuccess={() => setRefreshKey(prev => prev + 1)}
+        />
+        </>
     );
 };
 

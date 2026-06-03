@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Input, Space, Select, InputNumber, DatePicker } from "antd";
 import dayjs from "dayjs";
+import { comboReferenceMaterialMediumType } from "../../api/referenceMaterialMediumType";
 
 const CategoryOptions = [
     { label: "标准物质", value: 0 },
@@ -23,6 +24,8 @@ const PhysicalStateOptions = [
 
 const AddEdit = ({ record, onChange }) => {
     const [errors, setErrors] = useState({});
+    const [mediumOptions, setMediumOptions] = useState([]);
+    const [loading, setLoading] = useState(false);
 
     const validateInputs = () => {
         const newErrors = {};
@@ -39,8 +42,8 @@ const AddEdit = ({ record, onChange }) => {
         if (record?.physical_state === undefined || record?.physical_state === null) {
             newErrors.physical_state = "请选择物理形态";
         }
-        if (record?.quantity === undefined || record?.quantity === null) {
-            newErrors.quantity = "规格不可为空";
+        if (record?.specification === undefined || record?.specification === null) {
+            newErrors.specification = "规格不可为空";
         }
         if (record?.remaining === undefined || record?.remaining === null) {
             newErrors.remaining = "余量不可为空";
@@ -48,8 +51,11 @@ const AddEdit = ({ record, onChange }) => {
         if (record?.alert_threshold === undefined || record?.alert_threshold === null) {
             newErrors.alert_threshold = "报警阈值不可为空";
         }
-        if (record?.medium_type === undefined || record?.medium_type === null) {
-            newErrors.medium_type = "请选择介质类型";
+        if (record?.unit === undefined || record?.unit === null || record?.unit.trim() === "") {
+            newErrors.unit = "单位不可为空";
+        }
+        if (record?.medium_type_id === undefined || record?.medium_type_id === null) {
+            newErrors.medium_type_id = "请选择介质类型";
         }
 
         setErrors(newErrors);
@@ -62,6 +68,26 @@ const AddEdit = ({ record, onChange }) => {
         }
     }, [record, onChange]);
 
+    useEffect(() => {
+        const fetchCombo = async () => {
+            setLoading(true);
+            try {
+                const res = await comboReferenceMaterialMediumType({});
+                if (res.data.status === 0 || res.data.code === 0) {
+                    setMediumOptions((res.data.data || []).map(item => ({
+                        label: item.name,
+                        value: item.id
+                    })));
+                }
+            } catch (error) {
+                console.error("Fetch medium type error:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchCombo();
+    }, []);
+
     const updateField = (field, value) => {
         onChange({ ...record, [field]: value });
         if (errors[field]) {
@@ -70,7 +96,7 @@ const AddEdit = ({ record, onChange }) => {
     };
 
     return (
-        <Space direction="vertical" className="w-full" size="middle">
+        <Space orientation="vertical" className="w-full" size="middle">
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <div className="mb-2">名称 <span className="text-red-500">*</span></div>
@@ -124,22 +150,26 @@ const AddEdit = ({ record, onChange }) => {
                 </div>
                 <div>
                     <div className="mb-2">介质类型 <span className="text-red-500">*</span></div>
-                    <InputNumber
+                    <Select
                         className="w-full"
-                        placeholder="介质类型"
-                        value={record.medium_type}
-                        onChange={(val) => updateField("medium_type", val)}
-                        status={errors.medium_type ? "error" : ""}
+                        placeholder="请选择介质类型"
+                        loading={loading}
+                        options={mediumOptions}
+                        value={record.medium_type_id}
+                        onChange={(val) => updateField("medium_type_id", val)}
+                        status={errors.medium_type_id ? "error" : ""}
+                        showSearch
+                        optionFilterProp="label"
                     />
-                    {errors.medium_type && <div className="text-red-500 text-sm mt-1">{errors.medium_type}</div>}
+                    {errors.medium_type_id && <div className="text-red-500 text-sm mt-1">{errors.medium_type_id}</div>}
                 </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
                 <div>
-                    <div className="mb-2">实验室内部编码</div>
+                    <div className="mb-2">试剂标签编码</div>
                     <Input
-                        placeholder="内部编码"
+                        placeholder="试剂标签编码"
                         value={record.lab_code || ""}
                         onChange={(e) => updateField("lab_code", e.target.value)}
                         maxLength={255}
@@ -165,18 +195,29 @@ const AddEdit = ({ record, onChange }) => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
+                <div>
+                    <div className="mb-2">单位 <span className="text-red-500">*</span></div>
+                    <Input
+                        placeholder="单位(g/mL等)"
+                        value={record.unit || ""}
+                        onChange={(e) => updateField("unit", e.target.value)}
+                        status={errors.unit ? "error" : ""}
+                        maxLength={50}
+                    />
+                    {errors.unit && <div className="text-red-500 text-sm mt-1">{errors.unit}</div>}
+                </div>
                 <div>
                     <div className="mb-2">规格 <span className="text-red-500">*</span></div>
                     <InputNumber
                         className="w-full"
                         min={0}
                         placeholder="规格"
-                        value={record.quantity}
-                        onChange={(val) => updateField("quantity", val)}
-                        status={errors.quantity ? "error" : ""}
+                        value={record.specification}
+                        onChange={(val) => updateField("specification", val)}
+                        status={errors.specification ? "error" : ""}
                     />
-                    {errors.quantity && <div className="text-red-500 text-sm mt-1">{errors.quantity}</div>}
+                    {errors.specification && <div className="text-red-500 text-sm mt-1">{errors.specification}</div>}
                 </div>
                 <div>
                     <div className="mb-2">余量 <span className="text-red-500">*</span></div>
@@ -204,7 +245,7 @@ const AddEdit = ({ record, onChange }) => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
                 <div>
                     <div className="mb-2">不确定度(%)</div>
                     <InputNumber
@@ -227,9 +268,6 @@ const AddEdit = ({ record, onChange }) => {
                         onChange={(val) => updateField("mass_concentration", val)}
                     />
                 </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
                 <div>
                     <div className="mb-2">介质浓度(%)</div>
                     <InputNumber
@@ -241,6 +279,9 @@ const AddEdit = ({ record, onChange }) => {
                         onChange={(val) => updateField("medium_concentration", val)}
                     />
                 </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
                 <div>
                     <div className="mb-2">存放地点</div>
                     <Input
@@ -250,13 +291,11 @@ const AddEdit = ({ record, onChange }) => {
                         maxLength={255}
                     />
                 </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
                 <div>
                     <div className="mb-2">定值日期</div>
                     <DatePicker
                         className="w-full"
+                        placeholder="定值日期"
                         value={record.confirmed_at ? dayjs(record.confirmed_at) : null}
                         onChange={(date, dateString) => updateField("confirmed_at", dateString)}
                     />
@@ -265,8 +304,10 @@ const AddEdit = ({ record, onChange }) => {
                     <div className="mb-2">有效期至</div>
                     <DatePicker
                         className="w-full"
+                        placeholder="有效期至"
                         value={record.expiring_at ? dayjs(record.expiring_at) : null}
                         onChange={(date, dateString) => updateField("expiring_at", dateString)}
+                        disabledDate={current => current && current < dayjs().startOf('day')}
                     />
                 </div>
             </div>

@@ -8,6 +8,7 @@ const AddEdit = ({ record, onChange }) => {
     const [errors, setErrors] = useState({});
     const [categories, setCategories] = useState([]);
     const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(false);
 
     const validateInputs = () => {
         const newErrors = {};
@@ -37,6 +38,7 @@ const AddEdit = ({ record, onChange }) => {
 
     useEffect(() => {
         const fetchCombos = async () => {
+            setLoading(true);
             try {
                 const [categoryRes, userRes] = await Promise.all([
                     comboDeviceCategory(),
@@ -50,6 +52,8 @@ const AddEdit = ({ record, onChange }) => {
                 }
             } catch (error) {
                 console.error("Error fetching combos:", error);
+            } finally {
+                setLoading(false);
             }
         };
         fetchCombos();
@@ -70,6 +74,7 @@ const AddEdit = ({ record, onChange }) => {
                     <Select
                         className="w-full"
                         placeholder="请选择分类"
+                        loading={loading}
                         value={record.category_id}
                         onChange={(val) => handleChange("category_id", val)}
                         status={errors.category_id ? "error" : ""}
@@ -112,7 +117,7 @@ const AddEdit = ({ record, onChange }) => {
                 <div>
                     <div className="mb-2">校准周期 (天) <span className="text-red-500">*</span></div>
                     <InputNumber
-                        className="w-full"
+                        style={{ width: '100%' }}
                         placeholder="周期"
                         value={record.calibration_interval}
                         onChange={(val) => handleChange("calibration_interval", val)}
@@ -159,6 +164,7 @@ const AddEdit = ({ record, onChange }) => {
                     <Select
                         className="w-full"
                         placeholder="请选择维护人"
+                        loading={loading}
                         value={record.maintainer_id}
                         onChange={(val) => handleChange("maintainer_id", val)}
                         status={errors.maintainer_id ? "error" : ""}
@@ -175,6 +181,7 @@ const AddEdit = ({ record, onChange }) => {
                     <div className="mb-2">出厂日期</div>
                     <DatePicker
                         className="w-full"
+                        placeholder="请选择出厂日期"
                         value={record.manufactured_at ? dayjs(record.manufactured_at) : null}
                         onChange={(date, dateString) => handleChange("manufactured_at", dateString)}
                     />
@@ -183,6 +190,7 @@ const AddEdit = ({ record, onChange }) => {
                     <div className="mb-2">启用日期</div>
                     <DatePicker
                         className="w-full"
+                        placeholder="请选择启用日期"
                         value={record.commissioned_at ? dayjs(record.commissioned_at) : null}
                         onChange={(date, dateString) => handleChange("commissioned_at", dateString)}
                     />
@@ -193,8 +201,8 @@ const AddEdit = ({ record, onChange }) => {
                 <div className="mb-2">备注</div>
                 <Input.TextArea
                     placeholder="请输入备注"
-                    value={record.notes || ""}
-                    onChange={(e) => handleChange("notes", e.target.value)}
+                    value={record.description || ""}
+                    onChange={(e) => handleChange("description", e.target.value)}
                     rows={3}
                     maxLength={255}
                 />

@@ -25,3 +25,42 @@ body {
   margin: 0;
   padding: 0;
 }
+
+/* Custom Scrollbar - Premium minimal look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 20px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Fix Cascader Menu Height */
+.large-cascader .ant-cascader-menu {
+  max-height: 390px !important;
+  height: auto !important;
+}
+
+.large-cascader .ant-cascader-menu-list {
+  height: auto !important;
+  max-height: 390px !important;
+}

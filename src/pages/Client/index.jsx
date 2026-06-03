@@ -9,6 +9,14 @@ const ClientList = () => {
             title: "客户名称",
             dataIndex: "name",
             width: "20%",
+            render: (text, record) => (
+                <div className="flex flex-col">
+                    <div className="font-bold text-slate-700">{text}</div>
+                    {record.address && (
+                        <div className="text-[11px] text-gray-400 mt-0.5">{record.address}</div>
+                    )}
+                </div>
+            )
         },
         {
             title: "信用代码",

@@ -319,7 +319,7 @@
 | category | int | 是 | ge=0, le=2 | 类型（0=易制毒, 1=易制爆, 2=一般试剂）|
 | unit | string | 是 | max_length=255 | 单位 |
 | alert_threshold | float | 是 | ge=0 | 报警阈值 |
-| safety_sticker | string | 否 | max_length=255 | 安全合规警示贴文件路径 |
+| sticker_file | string | 否 | max_length=255 | 安全合规警示贴文件路径 |
 | description | string | 是 | max_length=255 | 描述 |
 
 #### Read请求参数
@@ -338,7 +338,7 @@
 | category | int | 类型（0=易制毒, 1=易制爆, 2=一般试剂）|
 | unit | string | 单位 |
 | alert_threshold | string | 报警阈值（字符串格式）|
-| safety_sticker | string | 安全警示贴路径 |
+| sticker_file | string | 安全警示贴路径 |
 | description | string | 描述 |
 | created_at | string | 创建时间 |
 | updated_at | string | 更新时间 |

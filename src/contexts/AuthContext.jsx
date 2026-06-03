@@ -13,11 +13,13 @@ export const AuthProvider = ({ children }) => {
 
     const checkAuthStatus = async () => {
         try {
-            const response = await checkUser();
+            const response = await checkUser({ _silent: true });
             // Assuming the Vue backend returns code === 0 for success
-            if (response.data && response.data.status === 0) {
+            const { status, data } = response.data || {};
+            
+            if (status === 0) {
                 setUser({
-                    ...response.data.data
+                    ...data
                 });
             } else {
                 setUser(null);

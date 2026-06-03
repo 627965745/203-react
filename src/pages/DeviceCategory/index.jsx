@@ -6,20 +6,35 @@ import AddEdit from './AddEdit';
 const DeviceCategoryList = () => {
     const columns = [
         {
-            title: "分类编码",
-            dataIndex: "code",
-            width: "30%",
+            title: "序号",
+            dataIndex: "id",
+            width: "10%",
+            align: "center",
+            render: (id) => <span className="text-gray-400 font-mono">{id}</span>
         },
         {
             title: "分类名称",
             dataIndex: "name",
-            width: "40%",
+            width: "25%",
+            render: (text) => <span className="font-bold text-blue-600">{text}</span>
         },
         {
-            title: "ID",
-            dataIndex: "id",
+            title: "分类编码",
+            dataIndex: "code",
             width: "10%",
-            align: "center"
+            render: (text) => <span className="text-gray-500">{text}</span>
+        },
+        {
+            title: "创建时间",
+            dataIndex: "created_at",
+            width: "20%",
+            render: (text) => <span className="text-xs text-gray-400">{text}</span>
+        },
+        {
+            title: "更新时间",
+            dataIndex: "updated_at",
+            width: "20%",
+            render: (text) => <span className="text-xs text-gray-400">{text}</span>
         }
     ];
 

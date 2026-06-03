@@ -1,7 +1,7 @@
 # LIMS-Python Admin接口文档
 
 ## 文档信息
-- **版本**: v1.0
+- **版本**: v2.0 (包含第一阶段和第二阶段)
 - **基础路径**: `/Admin`
 - **认证方式**: Session认证（用户组权限bitwise & 1）
 - **内容类型**: `application/json`
@@ -30,7 +30,8 @@
 | 0 | 成功 |
 | 11 | 用户组不匹配（无权限）|
 | 101 | 数据库无改动 |
-| 102 | 数据库无改动（User.update专用）|
+| 102 | 数据库无改动（User.update专用，不能修改自己）|
+| 103 | 数据库无改动（ReferenceMaterial.prepare专用）|
 
 ### 通用请求参数
 
@@ -48,36 +49,9 @@
 
 ---
 
-## 模块接口详情
+## 第一阶段：基础CRUD接口
 
-### 1. AnalysisType - 分析类型管理
-
-**路径前缀**: `/Admin/AnalysisType`
-
-| 接口 | 路径 | 方法 | 说明 |
-|------|------|------|------|
-| create | /create | POST | 创建分析类型 |
-| read | /read | POST | 分页查询列表 |
-| update | /update | POST | 更新分析类型 |
-| delete | /delete | POST | 软删除分析类型 |
-| combo | /combo | POST | 下拉选项 |
-
-#### Create/Update请求参数
-| 字段 | 类型 | 必填 | 约束 | 说明 |
-|------|------|------|------|------|
-| name | string | 是 | max_length=255 | 类型名称 |
-
-#### Read响应字段
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | int | ID |
-| name | string | 类型名称 |
-| created_at | string | 创建时间（格式：%Y-%m-%d %H:%i:%S）|
-| updated_at | string | 更新时间（格式：%Y-%m-%d %H:%i:%S）|
-
----
-
-### 2. Client - 客户管理
+### 1. Client - 客户管理
 
 **路径前缀**: `/Admin/Client`
 
@@ -97,7 +71,7 @@
 | contact | string | 否 | max_length=255 | 联系人姓名 |
 | mobile | string | 否 | max_length=255 | 联系人电话 |
 | landline | string | 否 | max_length=255 | 固定电话 |
-| email | string | 否 | Email格式, max_length=255 | 邮箱 |
+| email | EmailStr | 否 | Email格式, max_length=255 | 邮箱 |
 | address | string | 否 | max_length=255 | 地址 |
 
 #### Read响应字段
@@ -116,7 +90,7 @@
 
 ---
 
-### 3. Control - 菜单/权限控制管理
+### 2. Control - 菜单/权限控制管理
 
 **路径前缀**: `/Admin/Control`
 
@@ -155,11 +129,11 @@
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | ids | array[int] | 是 | 控制点ID列表 |
-| roles | array[int] | 是 | 角色ID列表 |
+| role_ids | array[int] | 是 | 角色ID列表 |
 
 ---
 
-### 4. Department - 部门/科室管理
+### 3. Department - 部门/科室管理
 
 **路径前缀**: `/Admin/Department`
 
@@ -291,6 +265,9 @@
 | update | /update | POST | 更新加工方法 |
 | delete | /delete | POST | 软删除 |
 | combo | /combo | POST | 下拉选项 |
+| optionCreate | /optionCreate | POST | **第二阶段** 创建加工选项 |
+| optionUpdate | /optionUpdate | POST | **第二阶段** 更新加工选项 |
+| optionDelete | /optionDelete | POST | **第二阶段** 删除加工选项 |
 
 #### Create/Update请求参数
 | 字段 | 类型 | 必填 | 约束 | 说明 |
@@ -298,37 +275,32 @@
 | name | string | 是 | max_length=255 | 方法名称 |
 | enabled | int | 是 | ge=0, le=1 | 是否启用 |
 
----
+#### Read响应字段
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | int | ID |
+| name | string | 方法名称 |
+| enabled | int | 是否启用 |
+| options | array | **第二阶段** 选项列表 [{id, value, enabled, created_at, updated_at}] |
+| created_at | string | 创建时间 |
+| updated_at | string | 更新时间 |
 
-### 8. ProcessingOption - 加工选项管理
-
-**路径前缀**: `/Admin/ProcessingOption`
-
-| 接口 | 路径 | 方法 | 说明 |
-|------|------|------|------|
-| create | /create | POST | 创建加工选项 |
-| read | /read | POST | 分页查询列表（按加工方法筛选）|
-| update | /update | POST | 更新加工选项 |
-| delete | /delete | POST | 软删除 |
-| combo | /combo | POST | 下拉选项（value (method_name)格式）|
-
-#### Create/Update请求参数
+#### OptionCreate/OptionUpdate请求参数
 | 字段 | 类型 | 必填 | 约束 | 说明 |
 |------|------|------|------|------|
-| processing_method_id | int | 是 | - | 关联加工方法ID |
+| method_id | int | 是 | - | 加工方法ID（Create时用）|
+| id | int | 是 | - | 选项ID（Update时用）|
 | value | string | 是 | max_length=255 | 选项值 |
 | enabled | int | 是 | ge=0, le=1 | 是否启用 |
 
-#### Read请求参数
+#### OptionDelete请求参数
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| processing_method_id | int | 是 | 加工方法ID |
-| page | int | 否 | 页码 |
-| rows | int | 否 | 每页条数 |
+| id | int | 是 | 选项ID |
 
 ---
 
-### 9. Reagent - 试剂管理
+### 7. Reagent - 试剂管理
 
 **路径前缀**: `/Admin/Reagent`
 
@@ -347,7 +319,7 @@
 | category | int | 是 | ge=0, le=2 | 类型（0=易制毒, 1=易制爆, 2=一般试剂）|
 | unit | string | 是 | max_length=255 | 单位 |
 | alert_threshold | float | 是 | ge=0 | 报警阈值 |
-| safety_sticker | string | 否 | max_length=255 | 安全合规警示贴文件路径 |
+| sticker_file | string | 否 | max_length=255 | 安全合规警示贴文件路径 |
 | description | string | 是 | max_length=255 | 描述 |
 
 #### Read请求参数
@@ -366,7 +338,7 @@
 | category | int | 类型（0=易制毒, 1=易制爆, 2=一般试剂）|
 | unit | string | 单位 |
 | alert_threshold | string | 报警阈值（字符串格式）|
-| safety_sticker | string | 安全警示贴路径 |
+| sticker_file | string | 安全警示贴路径 |
 | description | string | 描述 |
 | created_at | string | 创建时间 |
 | updated_at | string | 更新时间 |
@@ -451,13 +423,13 @@
 | row | int | 是 | - | 行号 |
 | description | string | 否 | max_length=255 | 备注 |
 
-#### Action请求参数
+#### Action请求参数 领用
 | 字段 | 类型 | 必填 | 约束 | 说明 |
 |------|------|------|------|------|
-| id | int | 是 | - | 库存ID |
+| id | int | 是 | - | 库存ID | （扫码枪）
 | user_id | int | 是 | - | 使用人ID |
-| action | int | 是 | ge=1, le=2 | 1=领用, 2=归还 |
-| quantity | float | 是 | ge=0 | 数量 |
+| action | int | 是 | ge=1, le=2 | 0=领用, 2=归还 |
+| quantity | float | 是 | ge=0 | 数量 | （外部接口接受称读书）
 | description | string | 否 | max_length=255 | 备注 |
 
 #### Logs请求参数
@@ -492,10 +464,15 @@
 | 接口 | 路径 | 方法 | 说明 |
 |------|------|------|------|
 | create | /create | POST | 创建标准物质 |
-| read | /read | POST | 分页查询列表（支持多条件筛选）|
+| read | /read | POST | 分页查询列表 |
 | update | /update | POST | 更新标准物质 |
 | delete | /delete | POST | 软删除 |
 | combo | /combo | POST | 下拉选项 |
+| use | /use | POST | **第二阶段** 使用标准物质 |
+| prepare | /prepare | POST | **第二阶段** 调配新试剂 |
+| componentCreate | /componentCreate | POST | **第二阶段** 创建成分 |
+| componentUpdate | /componentUpdate | POST | **第二阶段** 更新成分 |
+| componentDelete | /componentDelete | POST | **第二阶段** 删除成分 |
 
 #### Create/Update请求参数
 | 字段 | 类型 | 必填 | 约束 | 说明 |
@@ -514,7 +491,7 @@
 | alert_threshold | float | 是 | ge=0 | 报警阈值 |
 | uncertainty | float | 否 | ge=0, le=100 | 相对扩展不确定度(%) |
 | mass_concentration | float | 否 | ge=0, le=100 | 质量浓度(%) |
-| medium_type | int | 是 | ge=0, le=2 | 介质类型 |
+| medium_type_id | int | 是 | ge=0 | **第二阶段** 介质类型ID（关联medium_types表）|
 | medium_concentration | float | 否 | ge=0, le=100 | 介质浓度(%) |
 | confirmed_at | date | 否 | - | 定值日期 |
 | expiring_at | date | 否 | - | 有效期至 |
@@ -525,10 +502,101 @@
 | category | int | 否 | null | 分类筛选 |
 | stage | int | 否 | null | 阶段筛选 |
 | physical_state | int | 否 | null | 物理形态筛选 |
-| medium_type | int | 否 | null | 介质类型筛选 |
+| medium_type_id | int | 否 | null | **第二阶段** 介质类型筛选 |
 | query | string | 否 | '' | 搜索关键词 |
 | page | int | 否 | 0 | 页码 |
 | rows | int | 否 | 10 | 每页条数 |
+
+#### Read响应字段
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | int | ID |
+| name | string | 名称 |
+| category | int | 分类 |
+| stage | int | 阶段 |
+| physical_state | int | 物理形态 |
+| lab_code | string | 实验室编码 |
+| sample_code | string | 样品编码 |
+| batch_code | string | 批号 |
+| vendor | string | 研制单位 |
+| location | string | 存放地点 |
+| quantity | string | 规格 |
+| remaining | string | 余量 |
+| alert_threshold | string | 报警阈值 |
+| uncertainty | string | 不确定度 |
+| mass_concentration | string | 质量浓度 |
+| medium_type_id | int | 介质类型ID |
+| medium_type_name | string | **第二阶段** 介质类型名称 |
+| medium_concentration | string | 介质浓度 |
+| confirmed_at | string | 定值日期 |
+| expiring_at | string | 有效期至 |
+| components | array | **第二阶段** 成分列表 [{component, value, unit, uncertainty, created_at, updated_at}] |
+| parents | array | **第二阶段** 来源列表 [{material_id, name, used, created_at}] |
+| created_at | string | 创建时间 |
+| updated_at | string | 更新时间 |
+
+#### Use请求参数
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|------|------|------|------|------|
+| id | int | 是 | - | 标准物质ID |
+| used | float | 是 | ge=0 | 使用数量 |
+
+#### Prepare请求参数（调配新试剂）
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|------|------|------|------|------|
+| name | string | 是 | max_length=255 | 新试剂名称 |
+| category | int | 是 | ge=0, le=2 | 分类 |
+| stage | int | 是 | ge=0, le=3 | 阶段 |
+| physical_state | int | 是 | ge=0, le=2 | 物理形态 |
+| lab_code | string | 否 | max_length=255 | 实验室编码 |
+| sample_code | string | 否 | max_length=255 | 样品编码 |
+| batch_code | string | 否 | max_length=255 | 批号 |
+| vendor | string | 否 | max_length=255 | 研制单位 |
+| location | string | 否 | max_length=255 | 存放地点 |
+| quantity | float | 是 | ge=0 | 规格 |
+| remaining | float | 是 | ge=0 | 余量 |
+| alert_threshold | float | 是 | ge=0 | 报警阈值 |
+| uncertainty | float | 否 | ge=0, le=100 | 不确定度 |
+| mass_concentration | float | 否 | ge=0, le=100 | 质量浓度 |
+| medium_type_id | int | 是 | ge=0 | 介质类型ID |
+| medium_concentration | float | 否 | ge=0, le=100 | 介质浓度 |
+| confirmed_at | date | 否 | - | 定值日期 |
+| expiring_at | date | 否 | - | 有效期至 |
+| parents | array | 是 | - | 来源试剂列表 [{id, used}] |
+
+#### ComponentCreate/ComponentUpdate请求参数
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|------|------|------|------|------|
+| material_id | int | 是 | - | 标准物质ID |
+| component | string | 是 | max_length=255 | 成分名称 |
+| value | float | 是 | ge=0 | 标准值 |
+| unit | string | 是 | max_length=255 | 单位 |
+| uncertainty | float | 是 | ge=0 | 不确定度 |
+
+#### ComponentDelete请求参数
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| material_id | int | 是 | 标准物质ID |
+| component | string | 是 | 成分名称 |
+
+---
+
+### 11. ReferenceMaterialMediumType - 介质类型管理（第二阶段新增模块）
+
+**路径前缀**: `/ReagentAdmin/ReferenceMaterialMediumType`
+
+| 接口 | 路径 | 方法 | 说明 |
+|------|------|------|------|
+| create | /create | POST | 创建介质类型 |
+| read | /read | POST | 分页查询列表 |
+| update | /update | POST | 更新介质类型 |
+| delete | /delete | POST | 软删除 |
+| combo | /combo | POST | 下拉选项 |
+
+#### Create/Update请求参数
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|------|------|------|------|------|
+| name | string | 是 | max_length=255 | 类型名称 |
 
 ---
 
@@ -669,6 +737,8 @@
 | update | /update | POST | 更新角色 |
 | delete | /delete | POST | 软删除 |
 | combo | /combo | POST | 下拉选项 |
+| controlArrange | /controlArrange | POST | **第二阶段** 分配控制点 |
+| userArrange | /userArrange | POST | **第二阶段** 分配用户 |
 
 #### Create/Update请求参数
 | 字段 | 类型 | 必填 | 约束 | 说明 |
@@ -682,8 +752,22 @@
 | id | int | ID |
 | name | string | 角色名称 |
 | bitwise | int | 权限位 |
+| controls | array | **第二阶段** 关联控制点 [{id, name, created_at}] |
+| users | array | **第二阶段** 关联用户 [{id, name, created_at}] |
 | created_at | string | 创建时间 |
 | updated_at | string | 更新时间 |
+
+#### ControlArrange请求参数
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| ids | array[int] | 是 | 角色ID列表 |
+| control_ids | array[int] | 是 | 控制点ID列表 |
+
+#### UserArrange请求参数
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| ids | array[int] | 是 | 角色ID列表 |
+| user_ids | array[int] | 是 | 用户ID列表 |
 
 ---
 
@@ -1077,24 +1161,79 @@ name: 分类名称
 
 | 模块 | 基础路径 | 接口数量 | 特殊接口 |
 |------|----------|----------|----------|
-| AnalysisType | /Admin/AnalysisType | 5 | - |
 | Client | /Admin/Client | 5 | - |
 | Control | /Admin/Control | 6 | arrange(分配角色), read(GET) |
 | Department | /Admin/Department | 5 | read(GET) |
 | Device | /Admin/Device | 5 | - |
 | DeviceCategory | /Admin/DeviceCategory | 5 | - |
-| ProcessingMethod | /Admin/ProcessingMethod | 5 | - |
-| ProcessingOption | /Admin/ProcessingOption | 5 | - |
+| ProcessingMethod | /Admin/ProcessingMethod | 8 | **optionCreate**, **optionUpdate**, **optionDelete**(选项管理) |
 | Reagent | /Admin/Reagent | 5 | - |
 | ReagentStorage | /Admin/ReagentStorage | 5 | - |
-| ReferenceMaterial | /Admin/ReferenceMaterial | 5 | - |
-| ReportCover | /Admin/ReportCover | 5 | - |
-| ReportTable | /Admin/ReportTable | 5 | - |
-| Role | /Admin/Role | 5 | - |
-| TaskType | /Admin/TaskType | 5 | - |
+| ReferenceMaterial | /Admin/ReferenceMaterial | 11 | **use**, **prepare**(业务操作), **componentCreate**, **componentUpdate**, **componentDelete**(成分管理) |
+| ReportCover | /Admin/ReportCover | 8 | **fieldCreate**, **fieldUpdate**, **fieldDelete**(字段管理) |
+| ReportTable | /Admin/ReportTable | 8 | **fieldCreate**, **fieldUpdate**, **fieldDelete**(字段管理) |
+| Role | /Admin/Role | 7 | **controlArrange**, **userArrange**(分配管理) |
+| TaskAnalysisType | /Admin/TaskAnalysisType | 5 | 原AnalysisType重命名 |
+| TaskSampleType | /Admin/TaskSampleType | 5 | 原TaskType重命名 |
 | TestCategory | /Admin/TestCategory | 5 | - |
-| TestItem | /Admin/TestItem | 5 | - |
-| TestMethod | /Admin/TestMethod | 5 | - |
-| User | /Admin/User | 6 | reset(重置密码) |
+| TestItem | /Admin/TestItem | 6 | **arrange**(关联方法) |
+| TestMethod | /Admin/TestMethod | 9 | **arrange**(关联项目), **fieldCreate**, **fieldUpdate**, **fieldDelete**(字段管理) |
+| User | /Admin/User | 7 | reset(重置密码), **arrange**(分配角色) |
 
-**总计**: 19个模块，96个接口端点
+### 第二阶段新增模块
+
+| 模块 | 基础路径 | 接口数量 | 说明 |
+|------|----------|----------|------|
+| Log | /Admin/Log | 1 | 操作日志查询 |
+| ReagentStock | /Admin/ReagentStock | 6 | 试剂库存管理（入库、领用、归还、日志）|
+| ReferenceMaterialMediumType | /Admin/ReferenceMaterialMediumType | 5 | 介质类型管理 |
+
+**总计**: 22个模块，约130+个接口端点
+
+---
+
+## 第二阶段变更记录摘要
+
+### 1. 模块重命名
+- `AnalysisType` → `TaskAnalysisType`（表：analysis_types → task_analysis_types）
+- `TaskType` → `TaskSampleType`（表：task_types → task_sample_types）
+
+### 2. 模块删除
+- `ProcessingOption`（功能合并到ProcessingMethod中）
+
+### 3. 新增模块
+- `Log` - 操作日志
+- `ReagentStock` - 试剂库存（支持入库、领用、归还、日志追踪）
+- `ReferenceMaterialMediumType` - 介质类型字典
+
+### 4. 字段变更
+- Device: `notes` → `description`
+- ReferenceMaterial: `medium_type` → `medium_type_id`（改为关联ID）
+
+### 5. 新增业务接口
+| 模块 | 新增接口 | 功能 |
+|------|----------|------|
+| Device | /calibrate | 设备校准 |
+| ProcessingMethod | /optionCreate, /optionUpdate, /optionDelete | 选项管理 |
+| ReferenceMaterial | /use, /prepare | 使用和调配 |
+| ReferenceMaterial | /componentCreate, /componentUpdate, /componentDelete | 成分管理 |
+| ReportCover | /fieldCreate, /fieldUpdate, /fieldDelete | 字段管理 |
+| ReportTable | /fieldCreate, /fieldUpdate, /fieldDelete | 字段管理 |
+| Role | /controlArrange, /userArrange | 分配控制点和用户 |
+| TestItem | /arrange | 关联检测方法 |
+| TestMethod | /arrange | 关联检测项目 |
+| TestMethod | /fieldCreate, /fieldUpdate, /fieldDelete | 参数字段管理 |
+| User | /arrange | 分配角色 |
+
+### 6. 响应字段增强
+| 模块 | 新增响应字段 | 说明 |
+|------|--------------|------|
+| Device | calibration_logs, expired_by | 校准记录和到期时间 |
+| ProcessingMethod | options | 嵌套选项列表 |
+| ReferenceMaterial | components, sources, medium_type_name | 成分、来源、介质类型名称 |
+| ReportCover | fields | 嵌套字段列表 |
+| ReportTable | fields | 嵌套字段列表 |
+| Role | controls, users | 嵌套控制点和用户列表 |
+| TestItem | methods | 嵌套方法列表 |
+| TestMethod | fields, items | 嵌套参数字段和项目列表 |
+| User | roles | 嵌套角色列表 |

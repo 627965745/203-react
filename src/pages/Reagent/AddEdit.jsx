@@ -103,11 +103,11 @@ const AddEdit = ({ record, onChange }) => {
             </div>
 
             <div>
-                <div className="mb-2">安全警示贴路径 (Safety Sticker Path)</div>
+                <div className="mb-2">安全合规警示贴文件路径</div>
                 <Input
-                    placeholder="请输入合规警示贴文件路径"
-                    value={record.safety_sticker || ""}
-                    onChange={(e) => onChange({ ...record, safety_sticker: e.target.value })}
+                    placeholder="请输入合规警示贴文件路径 (可选)"
+                    value={record.sticker_file || ""}
+                    onChange={(e) => onChange({ ...record, sticker_file: e.target.value })}
                     maxLength={255}
                 />
             </div>

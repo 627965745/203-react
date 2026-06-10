@@ -91,6 +91,24 @@ const CrudTable = ({
     const [editingRecord, setEditingRecord] = useState(null);
     const isManualFetch = useRef(false);
 
+    // Stable wrappers for onChange to avoid mutating React's own useState setters directly,
+    // while remaining fully compatible with child components that attach validation methods to them.
+    const createOnChangeRef = useRef(null);
+    if (!createOnChangeRef.current) {
+        createOnChangeRef.current = (val) => {
+            setCurrentRecord(val);
+        };
+    }
+    const handleCreateChange = createOnChangeRef.current;
+
+    const editOnChangeRef = useRef(null);
+    if (!editOnChangeRef.current) {
+        editOnChangeRef.current = (val) => {
+            setEditingRecord(val);
+        };
+    }
+    const handleEditChange = editOnChangeRef.current;
+
     // Filter Logic for Header Display
     const activeFilterTags = useMemo(() => {
         if (!filterValues || !filterConfig) return [];
@@ -175,18 +193,24 @@ const CrudTable = ({
     }, [fetchData, pagination.pageSize, refreshKey]);
 
     const handleAdd = () => {
+        if (createOnChangeRef.current) {
+            createOnChangeRef.current.validate = null;
+        }
         setCurrentRecord(initialValues);
         setIsModalVisible(true);
     };
 
     const handleCancel = () => {
         setIsModalVisible(false);
+        if (createOnChangeRef.current) {
+            createOnChangeRef.current.validate = null;
+        }
     };
 
     const handleCreate = async () => {
         if (
-            typeof setCurrentRecord.validate === "function" &&
-            !setCurrentRecord.validate()
+            typeof handleCreateChange.validate === "function" &&
+            !handleCreateChange.validate()
         ) {
             return;
         }
@@ -210,6 +234,9 @@ const CrudTable = ({
             if (response.data.status === 0 || response.data.code === 0) {
                 message.success(`创建${entityName}成功`);
                 setIsModalVisible(false);
+                if (createOnChangeRef.current) {
+                    createOnChangeRef.current.validate = null;
+                }
                 fetchData(1, pagination.pageSize, filterValue);
             } else {
                 message.error(
@@ -225,6 +252,9 @@ const CrudTable = ({
     };
 
     const handleEdit = (record) => {
+        if (editOnChangeRef.current) {
+            editOnChangeRef.current.validate = null;
+        }
         // Merge with initialValues to ensure all fields are present
         let formattedRecord = { ...initialValues, ...record };
 
@@ -249,12 +279,15 @@ const CrudTable = ({
     const handleEditCancel = () => {
         setEditModalVisible(false);
         setEditingRecord(null);
+        if (editOnChangeRef.current) {
+            editOnChangeRef.current.validate = null;
+        }
     };
 
     const handleUpdate = async () => {
         if (
-            typeof setEditingRecord.validate === "function" &&
-            !setEditingRecord.validate()
+            typeof handleEditChange.validate === "function" &&
+            !handleEditChange.validate()
         ) {
             return;
         }
@@ -279,6 +312,9 @@ const CrudTable = ({
                 message.success(`修改${entityName}成功`);
                 setEditingRecord(null);
                 setEditModalVisible(false);
+                if (editOnChangeRef.current) {
+                    editOnChangeRef.current.validate = null;
+                }
                 fetchData(pagination.current, pagination.pageSize, filterValue);
             } else {
                 message.error(
@@ -536,7 +572,7 @@ const CrudTable = ({
                                     currentRecord,
                             }} // Dynamic prop name
                             record={currentRecord} // Fallback consistent name
-                            onChange={setCurrentRecord}
+                            onChange={handleCreateChange}
                         />
                     )}
                 </div>
@@ -560,7 +596,7 @@ const CrudTable = ({
                                     editingRecord,
                             }}
                             record={editingRecord}
-                            onChange={setEditingRecord}
+                            onChange={handleEditChange}
                         />
                     )}
                 </div>

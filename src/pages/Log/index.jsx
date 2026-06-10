@@ -120,7 +120,7 @@ const LogList = () => {
 
     return (
         <CrudTable
-            key={refreshKey}
+            refreshKey={refreshKey}
             title="操作日志"
             entityName="日志"
             columns={columns}

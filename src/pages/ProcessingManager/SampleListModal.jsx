@@ -244,7 +244,7 @@ const SampleListModal = ({ visible, task, onCancel }) => {
         >
             <div className="mt-[-24px] mx-[-24px]">
                 <CrudTable
-                    key={refreshKey}
+                    refreshKey={refreshKey}
                     entityName="样品"
                     columns={columns.map(c => ({ ...c, fixed: undefined }))}
                     api={api}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Form, Input, Button, message, Typography } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +15,7 @@ const Login = () => {
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const { checkAuthStatus, user } = useAuth();
+  const captchaUrlRef = useRef("");
 
   useEffect(() => {
     // 如果已经有 user，说明已经登录过，直接重定向
@@ -27,8 +28,8 @@ const Login = () => {
     fetchCaptcha();
     // Cleanup blob URL on unmount to prevent memory leaks
     return () => {
-      if (captchaUrl && captchaUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(captchaUrl);
+      if (captchaUrlRef.current && captchaUrlRef.current.startsWith('blob:')) {
+        URL.revokeObjectURL(captchaUrlRef.current);
       }
     };
   }, []);
@@ -54,9 +55,10 @@ const Login = () => {
         const url = URL.createObjectURL(blob);
         
         // 如果之前有旧的 blob URL，先释放掉
-        if (captchaUrl && captchaUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(captchaUrl);
+        if (captchaUrlRef.current && captchaUrlRef.current.startsWith('blob:')) {
+          URL.revokeObjectURL(captchaUrlRef.current);
         }
+        captchaUrlRef.current = url;
         setCaptchaUrl(url);
       } else {
         message.error('验证码加载失败');

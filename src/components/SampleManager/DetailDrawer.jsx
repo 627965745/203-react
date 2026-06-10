@@ -1,5 +1,16 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Drawer, Tabs, Table, Button, Space, message, Tag, Empty, Popconfirm, Divider, Card, Modal, Form, Select, DatePicker, Tooltip } from "antd";
+
+// Custom hook to safely update state only when the component is mounted, preventing memory leaks
+const useSafeState = (initialVal, isMounted) => {
+    const [state, setState] = useState(initialVal);
+    const safeSet = useCallback((val) => {
+        if (isMounted.current) {
+            setState(val);
+        }
+    }, [isMounted]);
+    return [state, safeSet];
+};
 import { 
     PlusOutlined, DeleteOutlined, EditOutlined, SettingOutlined, 
     ToolOutlined, ExperimentOutlined, UserOutlined, ClockCircleOutlined,
@@ -67,46 +78,54 @@ const DetailDrawer = ({
         rejectMethod // API for manager rejection
     } = apis;
 
-    const [activeTab, setActiveTab] = useState("items");
-    const [sampleData, setSampleData] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [hasChanged, setHasChanged] = useState(false);
+    const isMounted = useRef(true);
+    useEffect(() => {
+        isMounted.current = true;
+        return () => {
+            isMounted.current = false;
+        };
+    }, []);
+
+    const [activeTab, setActiveTab] = useSafeState("items", isMounted);
+    const [sampleData, setSampleData] = useSafeState(null, isMounted);
+    const [loading, setLoading] = useSafeState(false, isMounted);
+    const [hasChanged, setHasChanged] = useSafeState(false, isMounted);
     
     const sampleId = sampleData?.id;
     
     // UI Local States
-    const [activeItemId, setActiveItemId] = useState(null);
-    const [activeItemName, setActiveItemName] = useState("");
-    const [activeItemData, setActiveItemData] = useState(null);
-    const [editingInput, setEditingInput] = useState(null);
+    const [activeItemId, setActiveItemId] = useSafeState(null, isMounted);
+    const [activeItemName, setActiveItemName] = useSafeState("", isMounted);
+    const [activeItemData, setActiveItemData] = useSafeState(null, isMounted);
+    const [editingInput, setEditingInput] = useSafeState(null, isMounted);
 
     // Modal Visibility
-    const [inputModalVisible, setInputModalVisible] = useState(false);
-    const [itemModalVisible, setItemModalVisible] = useState(false);
-    const [configModalVisible, setConfigModalVisible] = useState(false);
+    const [inputModalVisible, setInputModalVisible] = useSafeState(false, isMounted);
+    const [itemModalVisible, setItemModalVisible] = useSafeState(false, isMounted);
+    const [configModalVisible, setConfigModalVisible] = useSafeState(false, isMounted);
     
     // Distribution Modal States
-    const [distributeVisible, setDistributeVisible] = useState(false);
-    const [distributeLoading, setDistributeLoading] = useState(false);
-    const [departments, setDepartments] = useState([]);
-    const [selectedDistData, setSelectedDistData] = useState(null);
+    const [distributeVisible, setDistributeVisible] = useSafeState(false, isMounted);
+    const [distributeLoading, setDistributeLoading] = useSafeState(false, isMounted);
+    const [departments, setDepartments] = useSafeState([], isMounted);
+    const [selectedDistData, setSelectedDistData] = useSafeState(null, isMounted);
     const [distributeForm] = Form.useForm();
     
     // Result Entry Modal States
-    const [resultEntryVisible, setResultEntryVisible] = useState(false);
-    const [activeMethodData, setActiveMethodData] = useState(null);
+    const [resultEntryVisible, setResultEntryVisible] = useSafeState(false, isMounted);
+    const [activeMethodData, setActiveMethodData] = useSafeState(null, isMounted);
     
     // Approval Modal States
-    const [approveVisible, setApproveVisible] = useState(false);
-    const [approveData, setApproveData] = useState(null);
-    const [rollingBack, setRollingBack] = useState(false);
+    const [approveVisible, setApproveVisible] = useSafeState(false, isMounted);
+    const [approveData, setApproveData] = useSafeState(null, isMounted);
+    const [rollingBack, setRollingBack] = useSafeState(false, isMounted);
     
     // Review Modal States
-    const [reviewVisible, setReviewVisible] = useState(false);
-    const [reviewData, setReviewData] = useState(null);
-    const [helperVisible, setHelperVisible] = useState(false);
-    const [helperLoading, setHelperLoading] = useState(false);
-    const [selectedHelperData, setSelectedHelperData] = useState(null);
+    const [reviewVisible, setReviewVisible] = useSafeState(false, isMounted);
+    const [reviewData, setReviewData] = useSafeState(null, isMounted);
+    const [helperVisible, setHelperVisible] = useSafeState(false, isMounted);
+    const [helperLoading, setHelperLoading] = useSafeState(false, isMounted);
+    const [selectedHelperData, setSelectedHelperData] = useSafeState(null, isMounted);
     const [helperForm] = Form.useForm();
 
     const isEditable = useMemo(() => {

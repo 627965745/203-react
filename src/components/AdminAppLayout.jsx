@@ -15,6 +15,16 @@ const AdminAppLayout = () => {
     const {
         token: { colorBgContainer, borderRadiusLG },
     } = theme.useToken();
+
+    if (!user) {
+        return (
+            <div className="min-h-screen w-screen flex items-center justify-center bg-[#f0f2f5] bg-no-repeat bg-position-[center_110px] bg-size-[100%] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWNIpQyUPTRXyQ.svg')]">
+                <div className="w-[90%] md:w-[500px] p-6 md:p-9 bg-white rounded-lg shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
+                    <Outlet />
+                </div>
+            </div>
+        );
+    }
     
     const [selectedKey, setSelectedKey] = useState(() => {
         const pathParts = location.pathname.split('/');

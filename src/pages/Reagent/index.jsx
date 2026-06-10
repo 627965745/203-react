@@ -92,7 +92,7 @@ const ReagentList = () => {
 
     return (
         <CrudTable
-            key={refreshKey}
+            refreshKey={refreshKey}
             title="试剂管理"
             entityName="试剂"
             columns={columns}

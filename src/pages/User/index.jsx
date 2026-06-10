@@ -219,7 +219,7 @@ const UserList = () => {
     return (
         <>
         <CrudTable
-            key={refreshKey}
+            refreshKey={refreshKey}
             title="用户管理"
             entityName="用户"
             columns={columns}

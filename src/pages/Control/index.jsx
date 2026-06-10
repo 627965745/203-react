@@ -132,7 +132,7 @@ const ControlPage = () => {
     return (
         <div className="bg-[#f0f2f5] min-h-full">
             <CrudTable
-                key={refreshKey}
+                refreshKey={refreshKey}
                 title="菜单与权限管理"
                 entityName="菜单/权限"
                 columns={columns}

@@ -161,7 +161,7 @@ const DeviceList = () => {
     return (
         <>
         <CrudTable
-            key={refreshKey} // Force reload when refreshKey changes
+            refreshKey={refreshKey} // Force reload when refreshKey changes
             title="设备管理"
             entityName="设备"
             columns={columns}
@@ -179,6 +179,14 @@ const DeviceList = () => {
                         <div>
                             <div className="text-gray-400 text-xs mb-1">校准周期</div>
                             <div className="text-sm">{record.calibration_interval} 天</div>
+                        </div>
+                        <div>
+                            <div className="text-gray-400 text-xs mb-1">创建时间</div>
+                            <div className="text-sm">{record.created_at || '-'}</div>
+                        </div>
+                        <div>
+                            <div className="text-gray-400 text-xs mb-1">更新时间</div>
+                            <div className="text-sm">{record.updated_at || '-'}</div>
                         </div>
                         <div className="flex-1">
                             <div className="text-gray-400 text-xs mb-1">备注</div>

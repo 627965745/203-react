@@ -139,7 +139,7 @@ const SampleList = () => {
                 <div className="flex items-center gap-2">
                     <BarcodeOutlined className="text-blue-500" />
                     <span className="font-mono font-bold text-blue-600">
-                        {selectedTask.lab_code}-{text?.toString().padStart(4, '0')}
+                        {selectedTask?.lab_code}-{text?.toString().padStart(4, '0')}
                     </span>
                     {record.description && (
                         <Tooltip title={record.description}>

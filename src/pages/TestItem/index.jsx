@@ -107,7 +107,7 @@ const TestItemList = () => {
     return (
         <>
         <CrudTable
-            key={refreshKey}
+            refreshKey={refreshKey}
             title="检测项目管理"
             entityName="检测项目"
             columns={columns}

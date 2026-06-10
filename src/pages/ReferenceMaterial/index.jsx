@@ -471,7 +471,7 @@ const ReferenceMaterialList = () => {
     return (
         <div className="h-full">
             <CrudTable
-                key={refreshKey}
+                refreshKey={refreshKey}
                 title="标准物质管理"
                 entityName="标准物质"
                 columns={columns}

@@ -138,7 +138,7 @@ const RoleList = () => {
     return (
         <>
         <CrudTable
-            key={refreshKey}
+            refreshKey={refreshKey}
             title="角色管理"
             entityName="角色"
             columns={columns}

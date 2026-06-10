@@ -266,7 +266,7 @@ const TaskList = () => {
     return (
         <>
         <CrudTable
-            key={refreshKey}
+            refreshKey={refreshKey}
             title="任务管理"
             entityName="任务"
             columns={columns}

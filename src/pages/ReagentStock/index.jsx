@@ -180,7 +180,7 @@ const ReagentStockList = ({ reagents, reagentId, setReagentId, users, setRefresh
     return (
         <>
             <CrudTable
-                key={refreshKey}
+                refreshKey={refreshKey}
                 title="试剂库存明细"
                 entityName="试剂库存"
                 columns={columns}
@@ -323,7 +323,7 @@ const ReagentLogsList = ({ users }) => {
 
     return (
         <CrudTable
-            key={refreshKey}
+            refreshKey={refreshKey}
             title="试剂操作流水"
             entityName="操作记录"
             columns={columns}

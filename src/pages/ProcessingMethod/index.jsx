@@ -145,7 +145,7 @@ const ProcessingMethodList = () => {
     return (
         <>
             <CrudTable
-                key={refreshKey}
+                refreshKey={refreshKey}
                 title="加工方法管理"
                 entityName="加工方法"
                 columns={columns}

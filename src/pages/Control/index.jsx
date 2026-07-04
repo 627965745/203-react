@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import CrudTable from '../../components/CrudTable';
-import { readControl, createControl, updateControl, deleteControl, comboControl } from '../../api/control';
+import BatchArrangeModal from '../../components/CrudTable/BatchArrangeModal';
+import { readControl, createControl, updateControl, deleteControl, comboControl, arrangeControl } from '../../api/control';
+import { comboRole } from '../../api/role';
 import AddEdit from './AddEdit';
 import ArrangeModal from './ArrangeModal';
 import { Tag, Button, Typography, Space, Tooltip, Switch, message } from 'antd';
@@ -20,6 +22,38 @@ const ControlPage = () => {
     const [arrangeVisible, setArrangeVisible] = useState(false);
     const [recordToArrange, setRecordToArrange] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
+
+    // Batch role association (tree: include descendants of each selected node)
+    const [batchArrangeOpen, setBatchArrangeOpen] = useState(false);
+    const [batchRows, setBatchRows] = useState([]);
+    const clearBatchRef = useRef(null);
+
+    const collectIdsWithDescendants = (rows) => {
+        const ids = new Set();
+        const walk = (node) => {
+            ids.add(node.id);
+            (node.children || []).forEach(walk);
+        };
+        (rows || []).forEach(walk);
+        return Array.from(ids);
+    };
+
+    const batchActions = useMemo(
+        () => [
+            {
+                key: "arrangeRoles",
+                label: "批量分配角色",
+                icon: <LinkOutlined />,
+                primary: true,
+                onClick: (rows, { clearSelection }) => {
+                    setBatchRows(rows);
+                    clearBatchRef.current = clearSelection;
+                    setBatchArrangeOpen(true);
+                },
+            },
+        ],
+        [],
+    );
 
     const handleStatusChange = async (checked, record) => {
         try {
@@ -139,8 +173,19 @@ const ControlPage = () => {
                 api={api}
                 AddEditForm={AddEdit}
                 initialValues={initialValues}
+                formatPayload={(payload) => {
+                    const newPayload = { ...payload };
+                    if (!newPayload.path) {
+                        delete newPayload.path;
+                    }
+                    if (!newPayload.icon) {
+                        delete newPayload.icon;
+                    }
+                    return newPayload;
+                }}
                 modalWidth={500}
                 tableProps={tableProps}
+                batchActions={batchActions}
                 renderActions={(record) => (
                     <Tooltip title="分配角色">
                         <Button 
@@ -160,6 +205,23 @@ const ControlPage = () => {
                 onClose={() => setArrangeVisible(false)}
                 record={recordToArrange}
                 onSuccess={() => setRefreshKey(prev => prev + 1)}
+            />
+
+            <BatchArrangeModal
+                open={batchArrangeOpen}
+                title="批量分配角色"
+                hint="请为所选菜单/权限（含其子节点）统一分配可访问角色（支持多选）："
+                comboApi={comboRole}
+                arrangeApi={arrangeControl}
+                extraKey="role_ids"
+                selectedRows={batchRows}
+                getIds={collectIdsWithDescendants}
+                optionMapper={(r) => ({ label: r.name, value: r.id })}
+                onCancel={() => setBatchArrangeOpen(false)}
+                onSuccess={() => {
+                    clearBatchRef.current?.();
+                    setRefreshKey((prev) => prev + 1);
+                }}
             />
         </div>
     );

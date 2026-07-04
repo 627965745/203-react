@@ -13,8 +13,10 @@ const AddEdit = ({ record, onChange, apis = {} }) => {
         if (!record?.task_id) {
             newErrors.task_id = "请选择所属任务";
         }
-        if (!record?.client_code || record.client_code.trim() === "") {
-            newErrors.client_code = "请输入客户方样品编号";
+        if (apis.distributeType !== "inspector") {
+            if (!record?.client_code || record.client_code.trim() === "") {
+                newErrors.client_code = "请输入客户方样品编号";
+            }
         }
 
         setErrors(newErrors);
@@ -31,21 +33,25 @@ const AddEdit = ({ record, onChange, apis = {} }) => {
     useEffect(() => {
         const fetchTasks = async () => {
             if (!comboTask) return;
-            setLoading(prev => ({ ...prev, task: true }));
+            setLoading((prev) => ({ ...prev, task: true }));
             try {
                 const res = await comboTask();
-                if (res.data.status === 0 || res.data.code === 0) {
+                if (res.data.status === 0) {
                     const rawData = res.data.data;
-                    const list = Array.isArray(rawData) ? rawData : (rawData?.rows || []);
-                    setTaskOptions(list.map(t => ({
-                        label: `${t.name || t.task_name} (#${t.id})`,
-                        value: t.id
-                    })));
+                    const list = Array.isArray(rawData)
+                        ? rawData
+                        : rawData?.rows || [];
+                    setTaskOptions(
+                        list.map((t) => ({
+                            label: `${t.name || t.task_name} (#${t.id})`,
+                            value: t.id,
+                        })),
+                    );
                 }
             } catch (error) {
                 console.error("Fetch tasks error:", error);
             } finally {
-                setLoading(prev => ({ ...prev, task: false }));
+                setLoading((prev) => ({ ...prev, task: false }));
             }
         };
         fetchTasks();
@@ -61,9 +67,17 @@ const AddEdit = ({ record, onChange, apis = {} }) => {
 
     return (
         <Space direction="vertical" className="w-full" size="middle">
-            <div className="grid grid-cols-2 gap-4">
+            <div
+                className={
+                    apis.distributeType === "inspector"
+                        ? "grid grid-cols-1 gap-4"
+                        : "grid grid-cols-2 gap-4"
+                }
+            >
                 <div>
-                    <div className="mb-2 font-bold text-gray-700">所属任务 <span className="text-red-500">*</span></div>
+                    <div className="mb-2 font-bold text-gray-700">
+                        所属任务 <span className="text-red-500">*</span>
+                    </div>
                     <Select
                         className="w-full"
                         placeholder="请选择所属任务"
@@ -76,19 +90,33 @@ const AddEdit = ({ record, onChange, apis = {} }) => {
                         optionFilterProp="label"
                         disabled={!!record.id} // Usually task_id shouldn't change on edit
                     />
-                    {errors.task_id && <div className="text-red-500 text-sm mt-1">{errors.task_id}</div>}
+                    {errors.task_id && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.task_id}
+                        </div>
+                    )}
                 </div>
-                <div>
-                    <div className="mb-2 font-bold text-gray-700">业务原始编号 <span className="text-red-500">*</span></div>
-                    <Input
-                        placeholder="请输入编号/名称"
-                        value={record.client_code || ""}
-                        onChange={(e) => updateField("client_code", e.target.value)}
-                        status={errors.client_code ? "error" : ""}
-                        maxLength={255}
-                    />
-                    {errors.client_code && <div className="text-red-500 text-sm mt-1">{errors.client_code}</div>}
-                </div>
+                {apis.distributeType !== "inspector" && (
+                    <div>
+                        <div className="mb-2 font-bold text-gray-700">
+                            业务原始编号 <span className="text-red-500">*</span>
+                        </div>
+                        <Input
+                            placeholder="请输入业务原始编号"
+                            value={record.client_code || ""}
+                            onChange={(e) =>
+                                updateField("client_code", e.target.value)
+                            }
+                            status={errors.client_code ? "error" : ""}
+                            maxLength={255}
+                        />
+                        {errors.client_code && (
+                            <div className="text-red-500 text-sm mt-1">
+                                {errors.client_code}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <div>

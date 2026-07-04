@@ -1,6 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import CrudTable from "../../components/CrudTable";
-import { readRole, createRole, updateRole, deleteRole } from "../../api/role";
+import BatchArrangeModal from "../../components/CrudTable/BatchArrangeModal";
+import { readRole, createRole, updateRole, deleteRole, userArrangeRole } from "../../api/role";
+import { comboUser } from "../../api/user";
 import AddEdit from './AddEdit';
 import ArrangeModal from './ArrangeModal';
 import MenuArrangeModal from './MenuArrangeModal';
@@ -15,10 +17,32 @@ const RoleList = () => {
     const [arrangeRecord, setArrangeRecord] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
 
+    // Batch user association
+    const [batchArrangeOpen, setBatchArrangeOpen] = useState(false);
+    const [batchRows, setBatchRows] = useState([]);
+    const clearBatchRef = useRef(null);
+
     const handleManageUsers = (record) => {
         setArrangeRecord(record);
         setArrangeVisible(true);
     };
+
+    const batchActions = useMemo(
+        () => [
+            {
+                key: "arrangeUsers",
+                label: "批量分配用户",
+                icon: <LinkOutlined />,
+                primary: true,
+                onClick: (rows, { clearSelection }) => {
+                    setBatchRows(rows);
+                    clearBatchRef.current = clearSelection;
+                    setBatchArrangeOpen(true);
+                },
+            },
+        ],
+        [],
+    );
 
     const handleManageMenus = (record) => {
         setArrangeRecord(record);
@@ -146,6 +170,7 @@ const RoleList = () => {
             AddEditForm={AddEdit}
             initialValues={initialValues}
             modalWidth={500}
+            batchActions={batchActions}
             renderActions={(record) => (
                 <>
                     <Button 
@@ -178,6 +203,24 @@ const RoleList = () => {
             onClose={() => setMenuArrangeVisible(false)}
             record={arrangeRecord}
             onSuccess={() => setRefreshKey(prev => prev + 1)}
+        />
+        <BatchArrangeModal
+            open={batchArrangeOpen}
+            title="批量分配用户"
+            hint="请为所选角色统一分配用户（支持多选）："
+            comboApi={comboUser}
+            arrangeApi={userArrangeRole}
+            extraKey="user_ids"
+            selectedRows={batchRows}
+            optionMapper={(u) => ({
+                label: u.nickname ? `${u.nickname} (${u.name})` : u.name,
+                value: u.id,
+            })}
+            onCancel={() => setBatchArrangeOpen(false)}
+            onSuccess={() => {
+                clearBatchRef.current?.();
+                setRefreshKey((prev) => prev + 1);
+            }}
         />
         </>
     );

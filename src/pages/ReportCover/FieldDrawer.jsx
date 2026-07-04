@@ -1,14 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { Drawer, Button, Table, Space, Popconfirm, Tag, message, Modal } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { fieldDeleteReportCover, fieldCreateReportCover, fieldUpdateReportCover } from '../../api/reportCover';
-import FieldAddEdit from './FieldAddEdit';
+import React, { useState, useEffect } from "react";
+import {
+    Drawer,
+    Button,
+    Table,
+    Space,
+    Popconfirm,
+    Tag,
+    message,
+    Modal,
+} from "antd";
+import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import {
+    fieldDeleteReportCover,
+    fieldCreateReportCover,
+    fieldUpdateReportCover,
+} from "../../api/reportCover";
+import FieldAddEdit from "./FieldAddEdit";
 
 const FIELD_TYPES = {
-    0: { text: '手动录入', color: 'blue' },
-    1: { text: '输入数据映射', color: 'cyan' },
-    2: { text: '检测结果映射', color: 'purple' },
-    3: { text: '固定值', color: 'default' }
+    0: { text: "手动录入", color: "blue" },
+    1: { text: "输入数据映射", color: "cyan" },
+    2: { text: "检测结果映射", color: "purple" },
+    3: { text: "固定值", color: "default" },
 };
 
 const FieldDrawer = ({ visible, onClose, cover, onSuccess }) => {
@@ -29,15 +42,15 @@ const FieldDrawer = ({ visible, onClose, cover, onSuccess }) => {
     const handleDelete = async (id) => {
         try {
             const res = await fieldDeleteReportCover({ id });
-            if (res.data.code === 0 || res.data.status === 0) {
-                message.success('字段删除成功');
-                handleUpdateLocalRecord(fields.filter(f => f.id !== id));
+            if (res.data.status === 0) {
+                message.success("字段删除成功");
+                handleUpdateLocalRecord(fields.filter((f) => f.id !== id));
                 if (onSuccess) onSuccess();
             } else {
-                message.error(res.data.message || '删除失败');
+                message.error(res.data.message || "删除失败");
             }
         } catch (e) {
-            message.error('删除接口异常');
+            message.error("删除接口异常");
         }
     };
 
@@ -52,13 +65,16 @@ const FieldDrawer = ({ visible, onClose, cover, onSuccess }) => {
     };
 
     const handleModalOk = async () => {
-        if (typeof editingField.validate === 'function' && !editingField.validate()) {
+        if (
+            typeof editingField.validate === "function" &&
+            !editingField.validate()
+        ) {
             return;
         }
 
         try {
             const payload = { ...editingField, cover_id: cover.id };
-            
+
             // Clean up invalid properties depending on type
             if (payload.type === 0) {
                 payload.input_mapped_from = null;
@@ -75,11 +91,13 @@ const FieldDrawer = ({ visible, onClose, cover, onSuccess }) => {
                 payload.result_mapped_from = null;
             }
 
-            const apiCall = payload.id ? fieldUpdateReportCover : fieldCreateReportCover;
+            const apiCall = payload.id
+                ? fieldUpdateReportCover
+                : fieldCreateReportCover;
             const res = await apiCall(payload);
 
-            if (res.data.code === 0 || res.data.status === 0) {
-                message.success(payload.id ? '字段更新成功' : '字段创建成功');
+            if (res.data.status === 0) {
+                message.success(payload.id ? "字段更新成功" : "字段创建成功");
                 setModalVisible(false);
 
                 // If API doesn't return the full fields array, we might just simulate it
@@ -88,77 +106,108 @@ const FieldDrawer = ({ visible, onClose, cover, onSuccess }) => {
                 // Since this is a Drawer, let's just use the form values to update local state.
                 const updatedList = [...fields];
                 if (payload.id) {
-                    const idx = updatedList.findIndex(f => f.id === payload.id);
+                    const idx = updatedList.findIndex(
+                        (f) => f.id === payload.id,
+                    );
                     if (idx > -1) {
                         updatedList[idx] = { ...updatedList[idx], ...payload };
                     }
                     // Try to get ID from response, otherwise use a temporary ID
                     // If onSuccess triggers a parent refresh, this temp ID will be replaced by the real one from props
-                    const responseId = typeof res.data.data === 'object' ? res.data.data?.id : res.data.data;
+                    const responseId =
+                        typeof res.data.data === "object"
+                            ? res.data.data?.id
+                            : res.data.data;
                     const newId = responseId || `temp_${Date.now()}`;
                     updatedList.push({ ...payload, id: newId });
                 }
                 handleUpdateLocalRecord(updatedList);
                 if (onSuccess) onSuccess();
-
             } else {
-                message.error(res.data.message || (payload.id ? '更新失败' : '创建失败'));
+                message.error(
+                    res.data.message || (payload.id ? "更新失败" : "创建失败"),
+                );
             }
         } catch (e) {
-            message.error('接口异常');
+            message.error("接口异常");
         }
     };
 
     const columns = [
         {
-            title: '字段名称',
-            dataIndex: 'name',
+            title: "字段名称",
+            dataIndex: "name",
             width: 150,
-            render: text => <span className="font-bold">{text}</span>
+            render: (text) => <span className="font-bold">{text}</span>,
         },
         {
-            title: '键名 (Key)',
-            dataIndex: 'key',
+            title: "键名 (Key)",
+            dataIndex: "key",
             width: 150,
-            render: text => <code className="bg-gray-100 p-1 rounded text-xs">{text}</code>
+            render: (text) => (
+                <code className="bg-gray-100 p-1 rounded text-xs">{text}</code>
+            ),
         },
         {
-            title: '类型',
-            dataIndex: 'type',
+            title: "类型",
+            dataIndex: "type",
             width: 120,
             render: (type) => {
-                const typeConfig = FIELD_TYPES[type] || { text: '未知', color: 'default' };
+                const typeConfig = FIELD_TYPES[type] || {
+                    text: "未知",
+                    color: "default",
+                };
                 return <Tag color={typeConfig.color}>{typeConfig.text}</Tag>;
-            }
+            },
         },
         {
-            title: '来源/固定值',
-            key: 'source',
+            title: "来源/固定值",
+            key: "source",
             width: 200,
             render: (_, record) => {
-                if (record.type === 1) return <span className="text-gray-600">映射: {record.input_mapped_from}</span>;
-                if (record.type === 2) return <span className="text-gray-600">结果: {record.result_mapped_from}</span>;
-                if (record.type === 3) return <span className="text-gray-800 font-bold">"{record.fixed_value}"</span>;
+                if (record.type === 1)
+                    return (
+                        <span className="text-gray-600">
+                            映射: {record.input_mapped_from}
+                        </span>
+                    );
+                if (record.type === 2)
+                    return (
+                        <span className="text-gray-600">
+                            结果: {record.result_mapped_from}
+                        </span>
+                    );
+                if (record.type === 3)
+                    return (
+                        <span className="text-gray-800 font-bold">
+                            "{record.fixed_value}"
+                        </span>
+                    );
                 return <span className="text-gray-400">-</span>;
-            }
+            },
         },
         {
-            title: '状态',
-            dataIndex: 'enabled',
+            title: "状态",
+            dataIndex: "enabled",
             width: 80,
-            render: enabled => (
-                <Tag color={enabled === 1 ? 'success' : 'error'}>
-                    {enabled === 1 ? '启用' : '禁用'}
+            render: (enabled) => (
+                <Tag color={enabled === 1 ? "success" : "error"}>
+                    {enabled === 1 ? "启用" : "禁用"}
                 </Tag>
-            )
+            ),
         },
         {
-            title: '操作',
-            key: 'action',
+            title: "操作",
+            key: "action",
             width: 150,
             render: (_, record) => (
                 <Space size="small">
-                    <Button type="link" size="small" onClick={() => handleEdit(record)} icon={<EditOutlined className="text-blue-500" />}>
+                    <Button
+                        type="link"
+                        size="small"
+                        onClick={() => handleEdit(record)}
+                        icon={<EditOutlined className="text-blue-500" />}
+                    >
                         编辑
                     </Button>
                     <Popconfirm
@@ -167,19 +216,24 @@ const FieldDrawer = ({ visible, onClose, cover, onSuccess }) => {
                         okText="确定"
                         cancelText="取消"
                     >
-                        <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                        <Button
+                            type="link"
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                        >
                             删除
                         </Button>
                     </Popconfirm>
                 </Space>
-            )
-        }
+            ),
+        },
     ];
 
     return (
         <>
             <Drawer
-                title={cover ? `字段管理 - ${cover.name}` : '字段管理'}
+                title={cover ? `字段管理 - ${cover.name}` : "字段管理"}
                 size="large"
                 placement="right"
                 onClose={onClose}
@@ -187,7 +241,11 @@ const FieldDrawer = ({ visible, onClose, cover, onSuccess }) => {
                 destroyOnHidden
             >
                 <div className="mb-4">
-                    <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={handleAdd}
+                    >
                         新增字段
                     </Button>
                 </div>
@@ -202,7 +260,7 @@ const FieldDrawer = ({ visible, onClose, cover, onSuccess }) => {
             </Drawer>
 
             <Modal
-                title={editingField?.id ? '编辑字段' : '新增字段'}
+                title={editingField?.id ? "编辑字段" : "新增字段"}
                 open={modalVisible}
                 onOk={handleModalOk}
                 onCancel={() => setModalVisible(false)}

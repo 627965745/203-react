@@ -19,11 +19,13 @@ import {
     InfoCircleOutlined,
     ToolOutlined,
     ProjectOutlined,
-    SendOutlined    
+    SendOutlined,
+    LeftOutlined,
+    RightOutlined
 } from "@ant-design/icons";
 import CrudTable from "../../../components/CrudTable";
 import { 
-    readSample, createSample, updateSample, deleteSample, comboTask,
+    readSample, comboSample, createSample, updateSample, deleteSample, comboTask, readTask,
     inputCreateSample, inputUpdateSample, inputDeleteSample,
     itemCreateSample, itemDeleteSample,
     methodCreateSample, methodUpdateSample, methodDeleteSample,
@@ -37,7 +39,7 @@ import { comboReferenceMaterial } from "../../../api/referenceMaterial";
 import AddEdit from "../../../components/SampleManager/AddEdit";
 import DetailDrawer from "../../../components/SampleManager/DetailDrawer";
 import SpecialSampleModal from "../../../components/SampleManager/modals/SpecialSampleModal";
-import BatchOperationModal from "../../../components/SampleManager/modals/BatchOperationModal";
+import SampleBatchModal, { getOperations } from "../../../components/SampleManager/modals/SampleBatchModal";
 
 
 const { Sider, Content } = Layout;
@@ -53,6 +55,8 @@ const SampleList = () => {
     const [tasks, setTasks] = useState([]);
     const [taskId, setTaskId] = useState(null);
     const [taskLoading, setTaskLoading] = useState(false);
+    const [taskPage, setTaskPage] = useState(0);
+    const [taskTotal, setTaskTotal] = useState(0);
     const [refreshKey, setRefreshKey] = useState(0);
     const [samples, setSamples] = useState([]);
 
@@ -60,23 +64,49 @@ const SampleList = () => {
     const [drawerVisible, setDrawerVisible] = useState(false);
     const [activeSampleId, setActiveSampleId] = useState(null);
 
-    // Batch Modal Visibility
-    const [batchOpVisible, setBatchOpVisible] = useState(false);
+    // Batch operation modal (samples selected in the table drive it)
+    const [batchModalOpen, setBatchModalOpen] = useState(false);
+    const [activeOp, setActiveOp] = useState(null);
+    const [batchSamples, setBatchSamples] = useState([]);
     const [specialSampleVisible, setSpecialSampleVisible] = useState(false);
+
+    const batchActions = useMemo(
+        () =>
+            getOperations("workflow").map((op) => ({
+                key: op.value,
+                label: op.label,
+                icon: op.icon,
+                danger:
+                    op.value.includes("Delete") || op.value === "reject",
+                onClick: (rows) => {
+                    setActiveOp(op);
+                    setBatchSamples(rows);
+                    setBatchModalOpen(true);
+                },
+            })),
+        [],
+    );
 
 
     const [showIds, setShowIds] = useState({});
 
     useEffect(() => {
         fetchTasks();
-    }, []);
+    }, [taskPage]);
 
     const fetchTasks = async () => {
         setTaskLoading(true);
         try {
-            const res = await comboTask();
-            const data = res.data.data || [];
-            setTasks(data);
+            const res = await readTask({ page: taskPage, rows: 10 });
+            if (res.data.status === 0) {
+                setTasks(res.data.data.rows || []);
+                setTaskTotal(res.data.data.total || 0);
+            } else {
+                setTasks([]);
+                setTaskTotal(0);
+            }
+        } catch (error) {
+            console.error("加载任务列表失败", error);
         } finally {
             setTaskLoading(false);
         }
@@ -117,7 +147,7 @@ const SampleList = () => {
     };
 
     const handleBatchSuccess = () => {
-        setBatchOpVisible(false);
+        setBatchModalOpen(false);
         setRefreshKey(prev => prev + 1);
     };
 
@@ -244,7 +274,7 @@ const SampleList = () => {
 
 
     const workflowApis = useMemo(() => ({
-        readSample: readSample,
+        readSample: comboSample,
         inputCreate: inputCreateSample,
         inputUpdate: inputUpdateSample,
         inputDelete: inputDeleteSample,
@@ -357,11 +387,29 @@ const SampleList = () => {
                                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无任务数据" />
                             )}
                         </div>
+
+                        <div className="flex justify-center items-center gap-4 py-3 border-t border-slate-100 flex-shrink-0 mt-2">
+                            <Button
+                                type="text"
+                                icon={<LeftOutlined />}
+                                disabled={taskPage === 0}
+                                onClick={() => setTaskPage((prev) => prev - 1)}
+                            />
+                            <span className="font-mono text-sm text-slate-600">
+                                第 {taskPage + 1} 页 / 共 {Math.max(1, Math.ceil(taskTotal / 10))} 页
+                            </span>
+                            <Button
+                                type="text"
+                                icon={<RightOutlined />}
+                                disabled={(taskPage + 1) * 10 >= taskTotal}
+                                onClick={() => setTaskPage((prev) => prev + 1)}
+                            />
+                        </div>
                     </Spin>
                 </div>
             </Sider>
 
-            <Content className="bg-slate-50 flex flex-col h-full overflow-hidden">
+            <Content className="bg-white flex flex-col h-full overflow-hidden">
                 {!taskId ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-12 bg-white">
                         <h2 className="text-3xl font-black text-slate-800 mb-4">选择一个任务</h2>
@@ -414,8 +462,9 @@ const SampleList = () => {
                             </Space>
                         </div>
                         <div className="p-6 flex-1 overflow-hidden">
-                            <div className="bg-white h-full rounded-3xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+                            <div className="bg-white h-full rounded-3xl overflow-y-auto flex flex-col">
                                 <CrudTable 
+                                    className="min-h-0 pb-6"
                                     refreshKey={refreshKey}
                                     title={
                                         <div className="flex items-center gap-3">
@@ -425,28 +474,23 @@ const SampleList = () => {
                                             <span className="text-lg font-black text-slate-800">样品清单</span>
                                         </div>
                                     }
-                                    entityName="样品"
+                                    entityName="非对照样"
                                     columns={columns}
                                     api={api}
                                     AddEditForm={(props) => <AddEdit {...props} apis={workflowApis} />}
                                     initialValues={initialValues}
                                     modalWidth={500}
                                     hideAdd={!taskId}
+                                    batchActions={batchActions}
+                                    batchDropdown
                                     actionExtra={
                                     <Space>
-                                        <Button 
-                                            icon={<ExperimentOutlined />} 
+                                        <Button
+                                            icon={<ExperimentOutlined />}
                                             onClick={() => setSpecialSampleVisible(true)}
                                             className="rounded-xl font-bold border-purple-100 text-purple-600 bg-purple-50"
                                         >
                                             添加特殊样品
-                                        </Button>
-                                        <Button 
-                                            icon={<RocketOutlined />} 
-                                            onClick={() => setBatchOpVisible(true)}
-                                            className="rounded-xl font-bold border-emerald-100 text-emerald-600 bg-emerald-50"
-                                        >
-                                            批量业务处理
                                         </Button>
                                     </Space>
                                     }
@@ -475,10 +519,13 @@ const SampleList = () => {
                 apis={workflowApis}
             />
 
-            <BatchOperationModal 
-                open={batchOpVisible} 
-                onCancel={() => setBatchOpVisible(false)} 
-                taskId={taskId}
+            <SampleBatchModal
+                open={batchModalOpen}
+                onCancel={() => setBatchModalOpen(false)}
+                operation={activeOp}
+                samples={batchSamples}
+                module="workflow"
+                task={selectedTask}
                 onSuccess={handleBatchSuccess}
             />
 

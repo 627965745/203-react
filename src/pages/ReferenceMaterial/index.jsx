@@ -71,7 +71,7 @@ const ReferenceMaterialList = () => {
         const fetchMediums = async () => {
             try {
                 const res = await comboReferenceMaterialMediumType({});
-                if (res.data.status === 0 || res.data.code === 0) {
+                if (res.data.status === 0) {
                     setMediumOptions(res.data.data || []);
                 }
             } catch (error) {

@@ -30,5 +30,9 @@ export default defineConfig({
         //         }
         //     }
         // }
+    },
+    build: {
+        minify: false,
+        cssMinify: true
     }
 });

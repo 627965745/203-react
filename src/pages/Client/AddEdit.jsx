@@ -11,13 +11,15 @@ const AddEdit = ({ record, onChange }) => {
             newErrors.name = "客户名称不可为空";
         }
         
-        if (record?.tax_code && record.tax_code.trim().length > 0) {
-            if (record.tax_code.trim().length !== 18) {
-                newErrors.tax_code = "统一社会信用代码必须为18位";
-            }
+        if (!record?.tax_code || record.tax_code.trim() === "") {
+            newErrors.tax_code = "统一社会信用代码不可为空";
+        } else if (record.tax_code.trim().length !== 18) {
+            newErrors.tax_code = "统一社会信用代码必须为18位";
         }
         
-        if (record?.email && record.email.trim().length > 0) {
+        if (!record?.email || record.email.trim() === "") {
+            newErrors.email = "邮箱不可为空";
+        } else {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(record.email.trim())) {
                 newErrors.email = "邮箱格式不正确";
@@ -56,7 +58,7 @@ const AddEdit = ({ record, onChange }) => {
             </div>
             
             <div>
-                <div className="mb-2">统一社会信用代码</div>
+                <div className="mb-2">统一社会信用代码 <span className="text-red-500">*</span></div>
                 <Input
                     placeholder="请输入18位统一社会信用代码"
                     value={record.tax_code || ""}
@@ -106,7 +108,7 @@ const AddEdit = ({ record, onChange }) => {
                     />
                 </div>
                 <div className="flex-1">
-                    <div className="mb-2">邮箱</div>
+                    <div className="mb-2">邮箱 <span className="text-red-500">*</span></div>
                     <Input
                         placeholder="请输入邮箱地址"
                         value={record.email || ""}

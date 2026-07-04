@@ -5,7 +5,6 @@ import dayjs from "dayjs";
 import { comboTestMethod } from "../../../api/testMethod";
 import { methodTestItem } from "../../../api/testItem";
 import { comboProcessingMethod } from "../../../api/processingMethod";
-import { comboUser } from "../../../api/user";
 
 const ItemConfigModal = ({ 
     visible, 
@@ -187,9 +186,9 @@ const ItemConfigModal = ({
                                     showCheckedStrategy="SHOW_CHILD"
                                 />
                             </Form.Item>
-                            <Form.Item label="预期完成时间" rules={[{ required: true, message: '请设定日期' }]} className="mb-0">
+                            <Form.Item label="预期完成时间" className="mb-0">
                                 <div className="flex gap-4 items-center">
-                                    <Form.Item name="deadline" noStyle>
+                                    <Form.Item name="deadline" rules={[{ required: true, message: '请设定日期' }]} noStyle>
                                         <DatePicker 
                                             className="flex-1 h-10 rounded-lg" 
                                             placeholder="选择日期" 
@@ -215,9 +214,9 @@ const ItemConfigModal = ({
                     </div>
 
                     <Form form={methodForm} layout="vertical" disabled={disabled}>
-                        <Form.Item label="检测方法" rules={[{ required: true, message: '必选' }]} className="mb-0">
+                        <Form.Item label="检测方法" className="mb-0">
                             <div className="flex gap-4 items-center">
-                                <Form.Item name="method_id" noStyle>
+                                <Form.Item name="method_id" rules={[{ required: true, message: '必选' }]} noStyle>
                                     <Select 
                                         placeholder={testMethods.length > 0 ? "请选择" : "暂无关联方法"} 
                                         options={testMethods.map(m => ({ label: m.name, value: m.id }))}
@@ -238,7 +237,7 @@ const ItemConfigModal = ({
                     
                     {itemData?.methods?.length > 0 && (
                         <div className="mt-6 border-t border-slate-200 pt-4">
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-3">已分发的方法列表 ({itemData.methods.length})</p>
+                            <p className="text-[12px] text-slate-400 font-bold uppercase tracking-wider mb-3">已分发的方法列表 ({itemData.methods.length})</p>
                             <div className="space-y-3">
                                 {itemData.methods.map(m => {
                                     const statusCfg = {
@@ -267,14 +266,14 @@ const ItemConfigModal = ({
                                                     </div>
                                                 </div>
                                                 <div className="text-right flex flex-col items-end gap-1">
-                                                    <span className="text-slate-500 font-mono text-[10px] font-bold">
+                                                    <span className="text-slate-500 font-mono text-[12px] font-bold">
                                                         {m.status === 0 ? '未下发（暂无期限）' : (m.test_deadline || '未设定完成期限')}
                                                     </span>
-                                                    <span className="text-[9px] text-slate-300 uppercase tracking-tighter">完成期限</span>
+                                                    <span className="text-[11px] text-slate-500 uppercase tracking-tighter">完成期限</span>
                                                 </div>
                                             </div>
                                             <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-50">
-                                                <div className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                                                <div className="flex items-center gap-1.5 text-[13px] text-slate-600">
                                                     <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px]">
                                                         <UserOutlined />
                                                     </div>
@@ -282,7 +281,7 @@ const ItemConfigModal = ({
                                                         {m.tester_name || (m.status === 0 ? '等待管理组下发' : (m.status === 1 ? '等待组长指派检测员' : '未指派'))}
                                                     </span>
                                                 </div>
-                                                <span className="text-[10px] text-slate-400">试验执行人</span>
+                                                <span className="text-[12px] text-slate-400">试验执行人</span>
                                             </div>
                                         </div>
                                     );

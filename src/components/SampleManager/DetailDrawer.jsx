@@ -15,7 +15,7 @@ import {
     PlusOutlined, DeleteOutlined, EditOutlined, SettingOutlined, 
     ToolOutlined, ExperimentOutlined, UserOutlined, ClockCircleOutlined,
     InfoCircleOutlined, CheckCircleOutlined, SendOutlined, TeamOutlined,
-    RollbackOutlined, AuditOutlined
+    RollbackOutlined, AuditOutlined, DownloadOutlined
 } from "@ant-design/icons";
 import { comboDepartment } from "../../api/department";
 import dayjs from "dayjs";
@@ -64,6 +64,8 @@ const DetailDrawer = ({
         methodCreate,
         methodUpdate,
         methodDelete,
+        processCreate,
+        processUpdate,
         processDelete,
         distribute,
         helperCreate,
@@ -75,7 +77,8 @@ const DetailDrawer = ({
         approve, // API for submitting for approval
         rollback, // API for rolling back submission
         approveMethod, // API for manager approval
-        rejectMethod // API for manager rejection
+        rejectMethod, // API for manager rejection
+        templateSample // API for downloading result entry template
     } = apis;
 
     const isMounted = useRef(true);
@@ -217,6 +220,52 @@ const DetailDrawer = ({
             message.error("撤回操作异常");
         } finally {
             setRollingBack(false);
+        }
+    };
+
+    const handleDownloadTemplate = async (item, method) => {
+        if (!templateSample) return;
+        const hide = message.loading("正在准备导出模板数据...", 0);
+        try {
+            const res = await templateSample({
+                item_id: item.item_id || item.id,
+                method_id: method.method_id || method.id,
+                sample_ids: [sampleData.id]
+            });
+            hide();
+            
+            if (res.data instanceof Blob) {
+                if (res.data.type === 'application/json') {
+                    const text = await res.data.text();
+                    const errorData = JSON.parse(text);
+                    message.error(errorData.message || "生成模板失败");
+                    return;
+                }
+
+                const blob = new Blob([res.data], {
+                    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                });
+                const sequence = sampleData.lab_code?.toString().padStart(4, "0") || "";
+                const prefix = sampleData.task_lab_code || "";
+                const code = prefix ? `${prefix}-${sequence}` : sequence;
+                const fileName = `ResultTemplate_${code}_${method.method_name || method.name || ""}.xlsx`;
+
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.setAttribute("download", fileName);
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.URL.revokeObjectURL(url);
+                message.success("模板下载成功");
+            } else {
+                message.warning("服务器未返回有效文件数据");
+            }
+        } catch (error) {
+            hide();
+            console.error("下载模板出错", error);
+            message.error("下载模板失败");
         }
     };
 
@@ -536,6 +585,9 @@ const DetailDrawer = ({
                                                                             <div className="flex justify-between items-center text-sm">
                                                                                 <Space>
                                                                                     <span className="font-bold text-slate-700">{m.method_name || m.name}</span>
+                                                                                    <Tag color={MethodStatusMap[m.status]?.color} className="m-0 border-none text-[10px] font-bold uppercase px-2">
+                                                                                        {MethodStatusMap[m.status]?.label || "未知状态"}
+                                                                                    </Tag>
                                                                                 </Space>
                                                                                 <Space>
                                                                                     {!hideDistribute && (
@@ -588,19 +640,32 @@ const DetailDrawer = ({
                                                                                     )}
                                                                                     
                                                                                     {showResultEntry && m.status >= 2 && (
-                                                                                        <Button 
-                                                                                            type="link"
-                                                                                            size="small" 
-                                                                                            icon={m.status >= 3 ? <InfoCircleOutlined /> : <EditOutlined />} 
-                                                                                            onClick={() => {
-                                                                                                setActiveMethodData(m);
-                                                                                                setActiveItemId(item.item_id || item.id);
-                                                                                                setResultEntryVisible(true);
-                                                                                            }}
-                                                                                            className="font-bold text-[11px] h-7"
-                                                                                        >
-                                                                                            {m.status >= 3 ? '查看数据' : '数据录入'}
-                                                                                        </Button>
+                                                                                        <>
+                                                                                            <Button 
+                                                                                                type="link"
+                                                                                                size="small" 
+                                                                                                icon={m.status >= 3 ? <InfoCircleOutlined /> : <EditOutlined />} 
+                                                                                                onClick={() => {
+                                                                                                    setActiveMethodData(m);
+                                                                                                    setActiveItemId(item.item_id || item.id);
+                                                                                                    setResultEntryVisible(true);
+                                                                                                }}
+                                                                                                className="font-bold text-[11px] h-7"
+                                                                                            >
+                                                                                                {m.status >= 3 ? '查看数据' : '数据录入'}
+                                                                                            </Button>
+                                                                                            {m.status === 2 && templateSample && (
+                                                                                                <Button 
+                                                                                                    type="link"
+                                                                                                    size="small" 
+                                                                                                    icon={<DownloadOutlined />} 
+                                                                                                    onClick={() => handleDownloadTemplate(item, m)}
+                                                                                                    className="font-bold text-[11px] h-7 text-green-600 hover:text-green-700"
+                                                                                                >
+                                                                                                    下载模板
+                                                                                                </Button>
+                                                                                            )}
+                                                                                        </>
                                                                                     )}
                                                                                     
                                                                                     {showResultEntry && m.status === 2 && (
@@ -657,14 +722,36 @@ const DetailDrawer = ({
                                                                                     )}
                                                                                     
                                                                                     {distributeType === 'inspector' && m.status >= 1 && m.status < 3 && !hideDistribute && (
-                                                                                        <Button 
-                                                                                            size="small" 
-                                                                                            icon={<UserOutlined />} 
+                                                                                        <Button
+                                                                                            size="small"
+                                                                                            icon={<UserOutlined />}
                                                                                             onClick={() => openHelperModal(item, m)}
                                                                                             className="font-bold text-[11px] rounded-lg h-7 ml-2"
                                                                                         >
                                                                                             辅助人员
                                                                                         </Button>
+                                                                                    )}
+
+                                                                                    {/* Delete method — allowed regardless of status; status is shown above */}
+                                                                                    {isEditable && methodDelete && (
+                                                                                        <Popconfirm
+                                                                                            title="确定删除此方法吗？"
+                                                                                            description={`当前状态：${MethodStatusMap[m.status]?.label || "未知"}，删除后其相关数据将一并移除。`}
+                                                                                            onConfirm={() => handleMethodDelete(item.item_id || item.id, m.method_id || m.id)}
+                                                                                            okText="确认删除"
+                                                                                            cancelText="取消"
+                                                                                            okButtonProps={{ danger: true }}
+                                                                                        >
+                                                                                            <Button
+                                                                                                type="link"
+                                                                                                size="small"
+                                                                                                danger
+                                                                                                icon={<DeleteOutlined />}
+                                                                                                className="font-bold text-[11px] h-7"
+                                                                                            >
+                                                                                                删除
+                                                                                            </Button>
+                                                                                        </Popconfirm>
                                                                                     )}
                                                                                 </Space>
                                                                             </div>

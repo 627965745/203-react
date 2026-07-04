@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { Button, Layout as AntLayout, Menu, theme, Space, message, Dropdown } from 'antd';
 import { UserOutlined, LockOutlined, LogoutOutlined } from '@ant-design/icons';
+import * as AntdIcons from '@ant-design/icons';
 import { logout } from "../api/user";
 import { useAuth } from '../contexts/AuthContext';
 
@@ -88,53 +89,54 @@ const AdminAppLayout = () => {
     };
 
     const sidebarComponent = useMemo(() => {
-        const menuItems = [
-            { key: "AnalysisType", label: <Link to="/AnalysisType">分析类型</Link> },
-            { key: "Client", label: <Link to="/Client">客户管理</Link> },
-            { key: "Control", label: <Link to="/Control">菜单/权限控制</Link> },
-            { key: "Department", label: <Link to="/Department">部门/科室</Link> },
-            { key: "Device", label: <Link to="/Device">设备管理</Link> },
-            { key: "DeviceCategory", label: <Link to="/DeviceCategory">设备分类</Link> },
-            { key: "ProcessingMethod", label: <Link to="/ProcessingMethod">加工方法</Link> },
-            { key: "Reagent", label: <Link to="/Reagent">试剂管理</Link> },
-            { key: "ReagentStorage", label: <Link to="/ReagentStorage">试剂柜管理</Link> },
-            { key: "ReagentStock", label: <Link to="/ReagentStock">试剂库存明细</Link> },
-            { key: "ReferenceMaterial", label: <Link to="/ReferenceMaterial">标准物质</Link> },
-            { key: "ReferenceMaterialMediumType", label: <Link to="/ReferenceMaterialMediumType">介质类型</Link> },
-            { key: "ReportCover", label: <Link to="/ReportCover">报告封面模板</Link> },
-            { key: "ReportTable", label: <Link to="/ReportTable">报告数据表</Link> },
-            { key: "TaskType", label: <Link to="/TaskType">任务类型</Link> },
-            { key: "workflowTask", label: <Link to="/workflowTask">任务管理</Link> },
-            { key: "ProcessingManager", label: <Link to="/ProcessingManager">加工任务管理</Link> },
-            { key: "workflowSample", label: <Link to="/workflowSample">样品管理</Link> },
-            { key: "departmentManager", label: <Link to="/departmentManager">科室任务管理</Link> },
-            { key: "testingManager", label: <Link to="/testingManager">检测任务管理</Link> },
-            { key: "testingSampleHelper", label: <Link to="/testingSampleHelper">辅助检测管理</Link> },
-            { key: "monitorThermometer", label: <Link to="/monitorThermometer">温湿度计管理</Link> },
+        const buildMenuItems = (menus) => {
+            if (!menus || !Array.isArray(menus)) return [];
+            return menus.map(item => {
+                const isParent = !item.path;
+                let key = item.id ? item.id.toString() : item.name;
+                
+                if (!isParent) {
+                    key = item.path.startsWith('/') ? item.path.slice(1) : item.path;
+                }
 
-            { key: "TestCategory", label: <Link to="/TestCategory">检测类别</Link> },
-            { key: "TestItem", label: <Link to="/TestItem">检测项目</Link> },
-            { key: "TestMethod", label: <Link to="/TestMethod">检测方法</Link> },
-            { key: "Role", label: <Link to="/Role">角色管理</Link> },
-            { key: "User", label: <Link to="/User">用户管理</Link> },
-            { key: "Log", label: <Link to="/Log">操作日志</Link> }
-        ];
+                let IconComponent = null;
+                if (item.icon && AntdIcons[item.icon]) {
+                    const IconComp = AntdIcons[item.icon];
+                    IconComponent = <IconComp />;
+                }
+
+                const result = {
+                    key,
+                    label: isParent ? item.name : <Link to={item.path}>{item.name}</Link>,
+                    icon: IconComponent
+                };
+
+                if (item.children && item.children.length > 0) {
+                    result.children = buildMenuItems(item.children);
+                }
+
+                return result;
+            });
+        };
+
+        const dynamicMenuItems = buildMenuItems(user?.menu);
 
         return (
-            <div className="border-r border-[#f0f0f0] w-[180px] sticky top-[88px] h-[calc(100vh-112px)] overflow-y-auto">
+            <div className="border-r border-[#f0f0f0] w-[200px] sticky top-[88px] h-[calc(100vh-112px)] overflow-y-auto">
                 <Menu
                     mode="inline"
                     selectedKeys={[selectedKey]}
                     className="border-r-0"
-                    items={menuItems}
+                    inlineIndent={8}
+                    items={dynamicMenuItems}
                 />
             </div>
         );
-    }, [selectedKey, navigate]);
+    }, [selectedKey, navigate, user?.menu]);
 
     return (
         <AntLayout className="min-h-screen">
-            <Header className="flex items-center justify-between px-6 sticky top-0 z-10">
+            <Header className="flex items-center justify-between px-6 sticky top-0" style={{ zIndex: 1000 }}>
                 <div className="flex items-center flex-1">
                     <div className="demo-logo text-white font-bold text-lg mr-8">
                         LIMS Admin

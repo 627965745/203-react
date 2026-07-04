@@ -38,8 +38,20 @@ const ArrangeModal = ({ visible, onClose, record, onSuccess }) => {
     const handleOk = async () => {
         setSubmitting(true);
         try {
+            const getAllIds = (node) => {
+                let ids = [node.id];
+                if (node.children && node.children.length > 0) {
+                    node.children.forEach(child => {
+                        ids = ids.concat(getAllIds(child));
+                    });
+                }
+                return ids;
+            };
+            
+            const allIds = getAllIds(record);
+
             const res = await arrangeControl({
-                ids: [record.id],
+                ids: allIds,
                 role_ids: selectedRoleIds
             });
             if (res.data.status === 0) {

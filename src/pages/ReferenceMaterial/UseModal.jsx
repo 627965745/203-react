@@ -11,7 +11,7 @@ const UseModal = ({ visible, onCancel, record, onSuccess }) => {
             form.resetFields();
             form.setFieldsValue({
                 id: record.id,
-                used: 0
+                used: 0,
             });
         }
     }, [visible, record]);
@@ -29,7 +29,7 @@ const UseModal = ({ visible, onCancel, record, onSuccess }) => {
         try {
             setLoading(true);
             const res = await useReferenceMaterial(values);
-            if (res.data.status === 0 || res.data.code === 0) {
+            if (res.data.status === 0) {
                 message.success("使用记录成功");
                 onSuccess();
                 onCancel();

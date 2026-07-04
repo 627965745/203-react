@@ -44,10 +44,10 @@ const AddEdit = ({ record, onChange }) => {
                     comboDeviceCategory(),
                     comboUser()
                 ]);
-                if (categoryRes.data.status === 0 || categoryRes.data.code === 0) {
+                if (categoryRes.data.status === 0) {
                     setCategories(categoryRes.data.data || []);
                 }
-                if (userRes.data.status === 0 || userRes.data.code === 0) {
+                if (userRes.data.status === 0) {
                     setUsers(userRes.data.data || []);
                 }
             } catch (error) {

@@ -9,6 +9,7 @@ export const readTestingSample = data => instance.post("/TestingManager/Sample/r
 export const updateTestingSample = data => instance.post("/TestingManager/Sample/update", data);
 export const deleteTestingSample = data => instance.post("/TestingManager/Sample/delete", data);
 export const referenceTestingSample = data => instance.post("/TestingManager/Sample/reference", data);
+export const comboTestingSample = data => instance.post("/TestingManager/Sample/combo", data);
 
 // Input Parameters (Limited to samples created by current user)
 export const inputCreateTestingSample = data => instance.post("/TestingManager/Sample/inputCreate", data);

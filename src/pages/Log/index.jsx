@@ -19,12 +19,22 @@ const LogList = () => {
         const fetchCombos = async () => {
             try {
                 const depRes = await comboDepartment({});
-                if (depRes.data.code === 0 || depRes.data.status === 0) {
-                    setDepartments((depRes.data.data || []).map(d => ({ label: d.name, value: d.id })));
+                if (depdepRes.data.status === 0) {
+                    setDepartments(
+                        (depRes.data.data || []).map((d) => ({
+                            label: d.name,
+                            value: d.id,
+                        })),
+                    );
                 }
                 const usrRes = await comboUser({});
-                if (usrRes.data.code === 0 || usrRes.data.status === 0) {
-                    setUsers((usrRes.data.data || []).map(u => ({ label: u.name, value: u.id })));
+                if (usrusrRes.data.status === 0) {
+                    setUsers(
+                        (usrRes.data.data || []).map((u) => ({
+                            label: u.name,
+                            value: u.id,
+                        })),
+                    );
                 }
             } catch (err) {
                 console.error("Error fetching combos", err);
@@ -45,16 +55,20 @@ const LogList = () => {
             width: "12%",
             render: (_, record) => (
                 <div className="flex flex-col">
-                    <span className="font-medium text-blue-600">{record.user_nickname || "-"}</span>
-                    <span className="text-xs text-gray-500">{record.department_name || "-"}</span>
+                    <span className="font-medium text-blue-600">
+                        {record.user_nickname || "-"}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                        {record.department_name || "-"}
+                    </span>
                 </div>
-            )
+            ),
         },
         {
             title: "请求路由",
             dataIndex: "route",
             width: "25%",
-            render: (val) => <span className="font-mono text-xs">{val}</span>
+            render: (val) => <span className="font-mono text-xs">{val}</span>,
         },
         {
             title: "状态",
@@ -66,7 +80,7 @@ const LogList = () => {
                 if (val === 0) color = "success";
                 else if (val > 0) color = "error";
                 return <Tag color={color}>{val}</Tag>;
-            }
+            },
         },
         {
             title: "请求参数",
@@ -74,16 +88,21 @@ const LogList = () => {
             width: "10%",
             align: "center",
             render: (val) => {
-                if (!val || val === "{}") return <span className="text-gray-400">-</span>;
+                if (!val || val === "{}")
+                    return <span className="text-gray-400">-</span>;
                 return (
-                    <Button 
-                        type="link" 
-                        size="small" 
+                    <Button
+                        type="link"
+                        size="small"
                         icon={<EyeOutlined />}
                         onClick={() => {
                             let content = val;
                             try {
-                                content = JSON.stringify(JSON.parse(val), null, 2);
+                                content = JSON.stringify(
+                                    JSON.parse(val),
+                                    null,
+                                    2,
+                                );
                             } catch (e) {}
                             Modal.info({
                                 title: "请求参数详情",
@@ -93,29 +112,32 @@ const LogList = () => {
                                         {content}
                                     </pre>
                                 ),
-                                maskClosable: true
+                                maskClosable: true,
                             });
                         }}
                     >
                         查看
                     </Button>
                 );
-            }
+            },
         },
         {
             title: "操作时间",
             dataIndex: "created_at",
             width: "15%",
-        }
+        },
     ];
 
-    const api = useMemo(() => ({
-        read: (params) => readLog({ ...params, ...filters }),
-    }), [filters]);
+    const api = useMemo(
+        () => ({
+            read: (params) => readLog({ ...params, ...filters }),
+        }),
+        [filters],
+    );
 
     const updateFilter = (field, value) => {
-        setFilters(prev => ({ ...prev, [field]: value }));
-        setRefreshKey(prev => prev + 1);
+        setFilters((prev) => ({ ...prev, [field]: value }));
+        setRefreshKey((prev) => prev + 1);
     };
 
     return (
@@ -132,10 +154,12 @@ const LogList = () => {
             filterValues={filters}
             filterConfig={{
                 department_id: { label: "部门", options: departments },
-                user_id: { label: "用户", options: users }
+                user_id: { label: "用户", options: users },
             }}
             onClearFilter={(key) => updateFilter(key, null)}
-            onClearAll={() => setFilters({ department_id: null, user_id: null })}
+            onClearAll={() =>
+                setFilters({ department_id: null, user_id: null })
+            }
             actionExtra={
                 <Space wrap>
                     <Select

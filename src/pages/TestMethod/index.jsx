@@ -1,6 +1,8 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import CrudTable from "../../components/CrudTable";
-import { readTestMethod, createTestMethod, updateTestMethod, deleteTestMethod } from "../../api/testMethod";
+import BatchArrangeModal from "../../components/CrudTable/BatchArrangeModal";
+import { readTestMethod, createTestMethod, updateTestMethod, deleteTestMethod, arrangeTestMethod } from "../../api/testMethod";
+import { comboTestItem } from "../../api/testItem";
 import AddEdit from './AddEdit';
 import FieldDrawer from './FieldDrawer';
 import ArrangeModal from './ArrangeModal';
@@ -15,6 +17,28 @@ const TestMethodList = () => {
     const [arrangeRecord, setArrangeRecord] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
     const [methods, setMethods] = useState([]);
+
+    // Batch item association
+    const [batchArrangeOpen, setBatchArrangeOpen] = useState(false);
+    const [batchRows, setBatchRows] = useState([]);
+    const clearBatchRef = useRef(null);
+
+    const batchActions = useMemo(
+        () => [
+            {
+                key: "arrangeItems",
+                label: "批量关联项目",
+                icon: <LinkOutlined />,
+                primary: true,
+                onClick: (rows, { clearSelection }) => {
+                    setBatchRows(rows);
+                    clearBatchRef.current = clearSelection;
+                    setBatchArrangeOpen(true);
+                },
+            },
+        ],
+        [],
+    );
 
     const handleManageFields = useCallback((record) => {
         setDrawerMethodRecord(record);
@@ -116,6 +140,7 @@ const TestMethodList = () => {
                 AddEditForm={AddEdit}
                 initialValues={initialValues}
                 modalWidth={500}
+                batchActions={batchActions}
                 renderActions={renderActions}
                 onDataLoaded={setMethods}
             />
@@ -130,6 +155,29 @@ const TestMethodList = () => {
                 onClose={() => setArrangeVisible(false)}
                 record={methods.find(m => m.id === arrangeRecord?.id)}
                 onSuccess={() => setRefreshKey(prev => prev + 1)}
+            />
+            <BatchArrangeModal
+                open={batchArrangeOpen}
+                title="批量关联检测项目"
+                hint="请为所选检测方法统一关联适用的检测项目（支持多选）："
+                comboApi={comboTestItem}
+                arrangeApi={arrangeTestMethod}
+                extraKey="item_ids"
+                selectedRows={batchRows}
+                optionsBuilder={(cats) =>
+                    (cats || []).map((c) => ({
+                        label: c.name,
+                        options: (c.items || []).map((i) => ({
+                            label: i.name,
+                            value: i.id,
+                        })),
+                    }))
+                }
+                onCancel={() => setBatchArrangeOpen(false)}
+                onSuccess={() => {
+                    clearBatchRef.current?.();
+                    setRefreshKey((prev) => prev + 1);
+                }}
             />
         </>
     );

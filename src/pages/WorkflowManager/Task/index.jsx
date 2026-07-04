@@ -43,12 +43,6 @@ const IsProcessingMap = {
 
 const TaskList = () => {
     const [showIds, setShowIds] = useState({});
-    const [filters, setFilters] = useState({
-        physical_state: null,
-        category: null,
-        delivered_by: null,
-        is_processing: null
-    });
     const [refreshKey, setRefreshKey] = useState(0);
     const [downloadVisible, setDownloadVisible] = useState(false);
     const [uploadVisible, setUploadVisible] = useState(false);
@@ -58,26 +52,6 @@ const TaskList = () => {
             ...prev,
             [key]: !prev[key]
         }));
-    };
-
-    const updateFilter = (field, value) => {
-        setFilters(prev => ({ ...prev, [field]: value }));
-        setRefreshKey(prev => prev + 1);
-    };
-
-    const handleClearFilter = (key) => {
-        setFilters(prev => ({ ...prev, [key]: null }));
-        setRefreshKey(prev => prev + 1);
-    };
-
-    const handleClearAll = () => {
-        setFilters({
-            physical_state: null,
-            category: null,
-            delivered_by: null,
-            is_processing: null
-        });
-        setRefreshKey(prev => prev + 1);
     };
 
     const renderNameWithId = (name, id, key, rowId, Icon) => {
@@ -234,17 +208,10 @@ const TaskList = () => {
     ], [showIds]);
 
     const api = useMemo(() => ({
-        read: (params) => readTask({ ...params, ...filters }),
+        read: readTask,
         create: createTask,
         update: updateTask,
         delete: deleteTask
-    }), [filters]);
-
-    const filterConfig = useMemo(() => ({
-        physical_state: { label: "形态", options: PhysicalStateMap },
-        category: { label: "类别", options: CategoryMap },
-        delivered_by: { label: "方式", options: DeliveredByMap },
-        is_processing: { label: "加工", options: IsProcessingMap }
     }), []);
 
     const initialValues = useMemo(() => ({
@@ -275,10 +242,6 @@ const TaskList = () => {
             initialValues={initialValues}
             modalWidth={800}
             scroll={{ x: 1800 }}
-            filterValues={filters}
-            filterConfig={filterConfig}
-            onClearFilter={handleClearFilter}
-            onClearAll={handleClearAll}
             actionExtra={
                 <div className="flex items-center gap-3">
                     <Button 
@@ -295,43 +258,6 @@ const TaskList = () => {
                     >
                         导入送样单
                     </Button>
-                    
-                    <div className="w-[1px] h-6 bg-gray-200 mx-2" />
-
-                    <Space wrap className="bg-gray-50/80 p-1 px-2 rounded-md border border-gray-100">
-                        <Select
-                            style={{ width: 100 }}
-                            placeholder="物理形态"
-                            allowClear
-                            value={filters.physical_state}
-                            onChange={(val) => updateFilter("physical_state", val)}
-                            options={Object.entries(PhysicalStateMap).map(([k, v]) => ({ label: v.label, value: Number(k) }))}
-                        />
-                        <Select
-                            style={{ width: 110 }}
-                            placeholder="检测类别"
-                            allowClear
-                            value={filters.category}
-                            onChange={(val) => updateFilter("category", val)}
-                            options={Object.entries(CategoryMap).map(([k, v]) => ({ label: v.label, value: Number(k) }))}
-                        />
-                        <Select
-                            style={{ width: 110 }}
-                            placeholder="来样方式"
-                            allowClear
-                            value={filters.delivered_by}
-                            onChange={(val) => updateFilter("delivered_by", val)}
-                            options={Object.entries(DeliveredByMap).map(([k, v]) => ({ label: v.label, value: Number(k) }))}
-                        />
-                        <Select
-                            style={{ width: 100 }}
-                            placeholder="是否加工"
-                            allowClear
-                            value={filters.is_processing}
-                            onChange={(val) => updateFilter("is_processing", val)}
-                            options={Object.entries(IsProcessingMap).map(([k, v]) => ({ label: v.label, value: Number(k) }))}
-                        />
-                    </Space>
                 </div>
             }
         />

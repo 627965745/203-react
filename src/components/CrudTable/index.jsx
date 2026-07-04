@@ -15,12 +15,15 @@ import {
     Popconfirm,
     Tooltip,
     Tag,
+    Dropdown,
 } from "antd";
 import {
     PlusOutlined,
     EditOutlined,
     DeleteOutlined,
     SearchOutlined,
+    DownOutlined,
+    UpOutlined,
 } from "@ant-design/icons";
 
 /**
@@ -75,9 +78,17 @@ const CrudTable = ({
     expandAll = false, // Whether to expand all rows by default
     refreshKey, // Optional prop to trigger a refresh from parent
     onDataLoaded, // Callback when data is successfully loaded
+    isRecordEditable, // Callback to check if a record is editable (default is true)
+    className = "",
+    batchActions, // Optional array of batch operations => enables multi-select + inline actions
+    // [{ key, label, icon, danger?, disabled?(rows), onClick(rows, { clearSelection, refresh }) }]
+    batchDropdown = false, // Collapse batchActions into a single "批量操作" dropdown
+    batchDropdownLabel = "批量操作",
 }) => {
     const [data, setData] = useState([]);
     const [expandedRowKeys, setExpandedRowKeys] = useState([]);
+    const [selectedRowKeys, setSelectedRowKeys] = useState([]);
+    const [selectedRows, setSelectedRows] = useState([]);
     const [loading, setLoading] = useState(false);
     const [pagination, setPagination] = useState({
         current: 1,
@@ -149,7 +160,7 @@ const CrudTable = ({
                     query,
                 });
 
-                if (response.data.status === 0 || response.data.code === 0) {
+                if (response.data.status === 0) {
                     const responseData = response.data.data;
 
                     let rows = [];
@@ -164,6 +175,10 @@ const CrudTable = ({
                     }
 
                     setData(rows);
+                    // Clear any batch selection whenever the dataset reloads
+                    // (pagination, search, refresh, create/update/delete)
+                    setSelectedRowKeys([]);
+                    setSelectedRows([]);
                     if (onDataLoaded) onDataLoaded(rows);
                     setPagination((prev) => ({
                         ...prev,
@@ -231,7 +246,7 @@ const CrudTable = ({
 
             const response = await api.create(payload);
 
-            if (response.data.status === 0 || response.data.code === 0) {
+            if (response.data.status === 0) {
                 message.success(`创建${entityName}成功`);
                 setIsModalVisible(false);
                 if (createOnChangeRef.current) {
@@ -308,7 +323,7 @@ const CrudTable = ({
 
             const response = await api.update(payload);
 
-            if (response.data.status === 0 || response.data.code === 0) {
+            if (response.data.status === 0) {
                 message.success(`修改${entityName}成功`);
                 setEditingRecord(null);
                 setEditModalVisible(false);
@@ -332,7 +347,7 @@ const CrudTable = ({
     const handleDelete = async (id) => {
         try {
             const response = await api.delete({ id });
-            if (response.data.status === 0 || response.data.code === 0) {
+            if (response.data.status === 0) {
                 message.success("删除成功");
                 let newCurrent = pagination.current;
                 if (data.length === 1 && pagination.current > 1) {
@@ -356,6 +371,92 @@ const CrudTable = ({
         fetchData(page, newPageSize, filterValue);
     };
 
+    const hasBatch = Array.isArray(batchActions) && batchActions.length > 0;
+    // When multi-select is on AND rows carry an expandable detail panel, we hide the
+    // native "+" expand column (no room next to the checkbox) and surface a
+    // "显示更多" toggle inside the action column instead.
+    const useShowMore = hasBatch && !!renderExpandedRow;
+
+    const clearSelection = useCallback(() => {
+        setSelectedRowKeys([]);
+        setSelectedRows([]);
+    }, []);
+
+    const toggleExpand = useCallback((id) => {
+        setExpandedRowKeys((prev) =>
+            prev.includes(id) ? prev.filter((k) => k !== id) : [...prev, id],
+        );
+    }, []);
+
+    const handleBatchClick = (action) => {
+        if (!selectedRows.length) {
+            message.warning("未选择任何数据");
+            return;
+        }
+        action.onClick(selectedRows, {
+            clearSelection,
+            refresh: () =>
+                fetchData(pagination.current, pagination.pageSize, filterValue),
+        });
+    };
+
+    const rowSelection = hasBatch
+        ? {
+              selectedRowKeys,
+              onChange: (keys, rows) => {
+                  setSelectedRowKeys(keys);
+                  setSelectedRows(rows);
+              },
+              preserveSelectedRowKeys: false,
+          }
+        : undefined;
+
+    // Inline, minimal batch controls (sit on the same row as 新增/actionExtra).
+    // Many actions (sample centers) collapse into a single "批量操作" dropdown.
+    const batchControls = !hasBatch ? null : batchDropdown ? (
+        <Dropdown
+            trigger={["click"]}
+            menu={{
+                items: batchActions.map((a) => ({
+                    key: a.key,
+                    label: a.label,
+                    icon: a.icon,
+                    danger: a.danger,
+                    disabled:
+                        typeof a.disabled === "function"
+                            ? a.disabled(selectedRows)
+                            : a.disabled,
+                })),
+                onClick: ({ key }) => {
+                    const action = batchActions.find((a) => a.key === key);
+                    if (action) handleBatchClick(action);
+                },
+            }}
+        >
+            <Button className="font-bold bg-white">
+                {batchDropdownLabel} <DownOutlined />
+            </Button>
+        </Dropdown>
+    ) : (
+        batchActions.map((a) => (
+            <Button
+                key={a.key}
+                type="link"
+                icon={a.icon}
+                danger={a.danger}
+                disabled={
+                    typeof a.disabled === "function"
+                        ? a.disabled(selectedRows)
+                        : a.disabled
+                }
+                onClick={() => handleBatchClick(a)}
+                className="font-bold px-0"
+            >
+                {a.label}
+            </Button>
+        ))
+    );
+
     const actionColumn = {
         title: "操作",
         key: "action",
@@ -363,12 +464,24 @@ const CrudTable = ({
         width: 160, // Reduced width since only one button is shown in this case, but good for general use
         align: "center",
         render: (_, record) => {
+            const editable =
+                typeof isRecordEditable === "function"
+                    ? isRecordEditable(record)
+                    : true;
+
             const editBtn = !hideEdit && (
                 <Button
                     type="link"
                     size="small"
                     onClick={() => handleEdit(record)}
-                    icon={<EditOutlined className="text-blue-500" />}
+                    disabled={!editable}
+                    icon={
+                        <EditOutlined
+                            className={
+                                editable ? "text-blue-500" : "text-gray-300"
+                            }
+                        />
+                    }
                 >
                     编辑
                 </Button>
@@ -379,17 +492,37 @@ const CrudTable = ({
                     okText="确定"
                     cancelText="取消"
                     placement="left"
+                    disabled={!editable}
                     onConfirm={() => handleDelete(record.id)}
                 >
                     <Button
                         type="link"
                         size="small"
                         danger
-                        icon={<DeleteOutlined />}
+                        disabled={!editable}
+                        icon={
+                            <DeleteOutlined
+                                className={
+                                    editable ? "text-red-500" : "text-gray-300"
+                                }
+                            />
+                        }
                     >
                         删除
                     </Button>
                 </Popconfirm>
+            );
+
+            const expanded = expandedRowKeys.includes(record.id);
+            const showMoreBtn = useShowMore && (
+                <Button
+                    type="link"
+                    size="small"
+                    icon={expanded ? <UpOutlined /> : <DownOutlined />}
+                    onClick={() => toggleExpand(record.id)}
+                >
+                    {expanded ? "收起" : "显示更多"}
+                </Button>
             );
 
             return (
@@ -398,6 +531,7 @@ const CrudTable = ({
                         renderActions(record, { handleEdit, handleDelete })}
                     {editBtn}
                     {deleteBtn}
+                    {showMoreBtn}
                 </Space>
             );
         },
@@ -407,16 +541,26 @@ const CrudTable = ({
         // Ensure no duplicate action column and put it last
         const filtered = (columns || []).filter((col) => col.key !== "action");
         return hideAction ? filtered : [...filtered, actionColumn];
-    }, [columns, renderActions, hideAction, hideEdit, hideDelete]);
+    }, [
+        columns,
+        renderActions,
+        hideAction,
+        hideEdit,
+        hideDelete,
+        useShowMore,
+        expandedRowKeys,
+    ]);
 
     useEffect(() => {
         if (expandAll && data.length > 0) {
-            setExpandedRowKeys(data.map(item => item.id));
+            setExpandedRowKeys(data.map((item) => item.id));
         }
     }, [data, expandAll]);
 
     return (
-        <div className="flex flex-col bg-white min-h-[calc(100vh-112px)] pl-6">
+        <div
+            className={`flex flex-col bg-white pl-6 ${className || "min-h-[calc(100vh-112px)]"}`}
+        >
             <div className="mb-8 flex justify-between items-center relative mt-2">
                 <h1 className="text-xl font-black text-slate-800 m-0 tracking-tight">
                     {title}
@@ -477,7 +621,7 @@ const CrudTable = ({
             </div>
 
             <div className="flex justify-between items-center mb-4 min-h-[40px]">
-                <Space>
+                <Space wrap>
                     {!hideAdd && (
                         <Button
                             type="primary"
@@ -488,6 +632,7 @@ const CrudTable = ({
                         </Button>
                     )}
                     {actionExtra}
+                    {batchControls}
                 </Space>
 
                 <div className="flex-1" />
@@ -510,6 +655,7 @@ const CrudTable = ({
             <Table
                 columns={mergedColumns}
                 dataSource={data}
+                rowSelection={rowSelection}
                 pagination={{
                     total: pagination.total,
                     current: pagination.current,
@@ -547,7 +693,11 @@ const CrudTable = ({
                               expandedRowKeys: expandedRowKeys,
                               onExpandedRowsChange: (keys) =>
                                   !expandAll && setExpandedRowKeys(keys),
-                              showExpandColumn: !expandAll,
+                              // Hide the native "+" column when the action-column
+                              // "显示更多" toggle is in charge (multi-select mode).
+                              showExpandColumn: useShowMore
+                                  ? false
+                                  : !expandAll,
                           }
                         : tableProps.expandable
                 }

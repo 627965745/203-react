@@ -26,6 +26,7 @@ import {
     readTestingTask, 
     exportTestingTask,
     readTestingSample, 
+    comboTestingSample,
     updateTestingSample, 
     deleteTestingSample,
     referenceTestingSample,
@@ -37,14 +38,15 @@ import {
     methodCreateTestingSample,
     methodDeleteTestingSample,
     approveTestingSample,
-    rollbackTestingSample
+    rollbackTestingSample,
+    templateTestingSample
 } from "../../../api/testing";
 import { comboReferenceMaterial } from "../../../api/referenceMaterial";
 
 import AddEdit from "../../../components/SampleManager/AddEdit";
 import DetailDrawer from "../../../components/SampleManager/DetailDrawer";
 import SpecialSampleModal from "../../../components/SampleManager/modals/SpecialSampleModal";
-import BatchOperationModal from "../../../components/SampleManager/modals/BatchOperationModal";
+import SampleBatchModal, { getOperations } from "../../../components/SampleManager/modals/SampleBatchModal";
 import DownloadTemplateModal from "./DownloadTemplateModal";
 import UploadDataModal from "./UploadDataModal";
 
@@ -74,13 +76,33 @@ const TestingSampleList = () => {
     const [detailVisible, setDetailVisible] = useState(false);
     const [activeSampleId, setActiveSampleId] = useState(null);
     const [specialSampleVisible, setSpecialSampleVisible] = useState(false);
-    const [batchModalVisible, setBatchModalVisible] = useState(false);
     const [downloadModalVisible, setDownloadModalVisible] = useState(false);
     const [uploadModalVisible, setUploadModalVisible] = useState(false);
 
+    // Batch operation modal (samples selected in the table drive it)
+    const [batchModalOpen, setBatchModalOpen] = useState(false);
+    const [activeOp, setActiveOp] = useState(null);
+    const [batchSamples, setBatchSamples] = useState([]);
+
+    const batchActions = useMemo(
+        () =>
+            getOperations("testing").map((op) => ({
+                key: op.value,
+                label: op.label,
+                icon: op.icon,
+                danger: op.value === "reject",
+                onClick: (rows) => {
+                    setActiveOp(op);
+                    setBatchSamples(rows);
+                    setBatchModalOpen(true);
+                },
+            })),
+        [],
+    );
+
     // API injection for generic components
     const testingApis = useMemo(() => ({
-        readSample: readTestingSample,
+        readSample: comboTestingSample,
         inputCreate: inputCreateTestingSample,
         inputUpdate: inputUpdateTestingSample,
         inputDelete: inputDeleteTestingSample,
@@ -97,8 +119,10 @@ const TestingSampleList = () => {
         rollback: rollbackTestingSample,
         
         // Special sample APIs
+        referenceSample: referenceTestingSample,
         comboTask: readTestingTask,
         comboReferenceMaterial: comboReferenceMaterial,
+        templateSample: templateTestingSample,
         onSuccess: () => setRefreshKey(prev => prev + 1)
     }), []);
 
@@ -206,26 +230,18 @@ const TestingSampleList = () => {
             }
         },
         {
-            title: "客户样号",
-            dataIndex: "client_code",
-            width: 180,
-            render: (text) => (
-                <div className="flex items-center gap-2">
-                    <NumberOutlined className="text-slate-400" />
-                    <span className="font-bold text-slate-700">{text}</span>
-                </div>
-            )
-        },
-        {
             title: "创建人",
             dataIndex: "creator_name",
             width: 160,
-            render: (name) => (
-                <Space>
-                    <UserOutlined className="text-gray-400" />
-                    <span>{name || '-'}</span>
-                </Space>
-            )
+            render: (name, record) => {
+                const isNotSelfCreated = record.creator_id === null || record.creator_id === undefined || record.creator_name === null || record.creator_name === undefined;
+                return (
+                    <Space>
+                        <UserOutlined className="text-gray-400" />
+                        <span>{isNotSelfCreated ? "非本人创建" : (name || '-')}</span>
+                    </Space>
+                );
+            }
         },
     ], [selectedTask]);
 
@@ -330,7 +346,7 @@ const TestingSampleList = () => {
                 }
             `}</style>
 
-            <Content className="bg-slate-50 flex flex-col h-full overflow-hidden">
+            <Content className="bg-white flex flex-col h-full overflow-hidden">
                 {!taskId ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-12 bg-white">
                         <div className="w-24 h-24 bg-orange-50 rounded-full flex items-center justify-center mb-6">
@@ -358,6 +374,7 @@ const TestingSampleList = () => {
                                     icon={<MenuUnfoldOutlined />} 
                                     onClick={() => setTaskDrawerVisible(true)}
                                     className="rounded-xl font-bold"
+                                    type="primary"
                                 >
                                     任务切换
                                 </Button>
@@ -391,8 +408,9 @@ const TestingSampleList = () => {
                         </div>
 
                         <div className="p-6 flex-1 overflow-hidden sample-table-container">
-                            <div className="bg-white h-full rounded-3xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+                            <div className="bg-white h-full rounded-3xl overflow-y-auto flex flex-col">
                                 <CrudTable 
+                                    className="min-h-0 pb-6"
                                     refreshKey={refreshKey}
                                     title={
                                         <div className="flex items-center gap-3">
@@ -410,17 +428,18 @@ const TestingSampleList = () => {
                                     modalWidth={500}
                                     hideAdd={true}
                                     renderActions={renderActions}
+                                    isRecordEditable={(record) => {
+                                        return record.creator_id !== null && 
+                                               record.creator_id !== undefined && 
+                                               record.creator_name !== null && 
+                                               record.creator_name !== undefined;
+                                    }}
+                                    batchActions={batchActions}
+                                    batchDropdown
                                     actionExtra={
                                         <Space>
-                                            <Button 
-                                                icon={<EditOutlined />} 
-                                                onClick={() => setBatchModalVisible(true)}
-                                                className="rounded-xl font-bold border-blue-100 text-blue-600 bg-blue-50"
-                                            >
-                                                批量操作中心
-                                            </Button>
-                                            <Button 
-                                                icon={<PlusOutlined />} 
+                                            <Button
+                                                icon={<PlusOutlined />}
                                                 onClick={() => setSpecialSampleVisible(true)}
                                                 className="rounded-xl font-bold border-orange-100 text-orange-600 bg-orange-50"
                                             >
@@ -504,13 +523,15 @@ const TestingSampleList = () => {
                 apis={testingApis}
             />
 
-            <BatchOperationModal
-                open={batchModalVisible}
-                onCancel={() => setBatchModalVisible(false)}
-                taskId={taskId}
+            <SampleBatchModal
+                open={batchModalOpen}
+                onCancel={() => setBatchModalOpen(false)}
+                operation={activeOp}
+                samples={batchSamples}
                 module="testing"
+                task={selectedTask}
                 onSuccess={() => {
-                    setBatchModalVisible(false);
+                    setBatchModalOpen(false);
                     setRefreshKey(prev => prev + 1);
                 }}
             />

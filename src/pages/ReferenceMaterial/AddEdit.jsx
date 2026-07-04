@@ -39,22 +39,38 @@ const AddEdit = ({ record, onChange }) => {
         if (record?.stage === undefined || record?.stage === null) {
             newErrors.stage = "请选择阶段";
         }
-        if (record?.physical_state === undefined || record?.physical_state === null) {
+        if (
+            record?.physical_state === undefined ||
+            record?.physical_state === null
+        ) {
             newErrors.physical_state = "请选择物理形态";
         }
-        if (record?.specification === undefined || record?.specification === null) {
+        if (
+            record?.specification === undefined ||
+            record?.specification === null
+        ) {
             newErrors.specification = "规格不可为空";
         }
         if (record?.remaining === undefined || record?.remaining === null) {
             newErrors.remaining = "余量不可为空";
         }
-        if (record?.alert_threshold === undefined || record?.alert_threshold === null) {
+        if (
+            record?.alert_threshold === undefined ||
+            record?.alert_threshold === null
+        ) {
             newErrors.alert_threshold = "报警阈值不可为空";
         }
-        if (record?.unit === undefined || record?.unit === null || record?.unit.trim() === "") {
+        if (
+            record?.unit === undefined ||
+            record?.unit === null ||
+            record?.unit.trim() === ""
+        ) {
             newErrors.unit = "单位不可为空";
         }
-        if (record?.medium_type_id === undefined || record?.medium_type_id === null) {
+        if (
+            record?.medium_type_id === undefined ||
+            record?.medium_type_id === null
+        ) {
             newErrors.medium_type_id = "请选择介质类型";
         }
 
@@ -73,11 +89,13 @@ const AddEdit = ({ record, onChange }) => {
             setLoading(true);
             try {
                 const res = await comboReferenceMaterialMediumType({});
-                if (res.data.status === 0 || res.data.code === 0) {
-                    setMediumOptions((res.data.data || []).map(item => ({
-                        label: item.name,
-                        value: item.id
-                    })));
+                if (res.data.status === 0) {
+                    setMediumOptions(
+                        (res.data.data || []).map((item) => ({
+                            label: item.name,
+                            value: item.id,
+                        })),
+                    );
                 }
             } catch (error) {
                 console.error("Fetch medium type error:", error);
@@ -99,7 +117,9 @@ const AddEdit = ({ record, onChange }) => {
         <Space orientation="vertical" className="w-full" size="middle">
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <div className="mb-2">名称 <span className="text-red-500">*</span></div>
+                    <div className="mb-2">
+                        名称 <span className="text-red-500">*</span>
+                    </div>
                     <Input
                         placeholder="请输入名称"
                         value={record.name || ""}
@@ -107,10 +127,16 @@ const AddEdit = ({ record, onChange }) => {
                         status={errors.name ? "error" : ""}
                         maxLength={255}
                     />
-                    {errors.name && <div className="text-red-500 text-sm mt-1">{errors.name}</div>}
+                    {errors.name && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.name}
+                        </div>
+                    )}
                 </div>
                 <div>
-                    <div className="mb-2">分类 <span className="text-red-500">*</span></div>
+                    <div className="mb-2">
+                        分类 <span className="text-red-500">*</span>
+                    </div>
                     <Select
                         className="w-full"
                         placeholder="请选择分类"
@@ -119,13 +145,19 @@ const AddEdit = ({ record, onChange }) => {
                         onChange={(val) => updateField("category", val)}
                         status={errors.category ? "error" : ""}
                     />
-                    {errors.category && <div className="text-red-500 text-sm mt-1">{errors.category}</div>}
+                    {errors.category && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.category}
+                        </div>
+                    )}
                 </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
                 <div>
-                    <div className="mb-2">阶段 <span className="text-red-500">*</span></div>
+                    <div className="mb-2">
+                        阶段 <span className="text-red-500">*</span>
+                    </div>
                     <Select
                         className="w-full"
                         placeholder="请选择阶段"
@@ -134,10 +166,16 @@ const AddEdit = ({ record, onChange }) => {
                         onChange={(val) => updateField("stage", val)}
                         status={errors.stage ? "error" : ""}
                     />
-                    {errors.stage && <div className="text-red-500 text-sm mt-1">{errors.stage}</div>}
+                    {errors.stage && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.stage}
+                        </div>
+                    )}
                 </div>
                 <div>
-                    <div className="mb-2">物理形态 <span className="text-red-500">*</span></div>
+                    <div className="mb-2">
+                        物理形态 <span className="text-red-500">*</span>
+                    </div>
                     <Select
                         className="w-full"
                         placeholder="请选择物理形态"
@@ -146,10 +184,16 @@ const AddEdit = ({ record, onChange }) => {
                         onChange={(val) => updateField("physical_state", val)}
                         status={errors.physical_state ? "error" : ""}
                     />
-                    {errors.physical_state && <div className="text-red-500 text-sm mt-1">{errors.physical_state}</div>}
+                    {errors.physical_state && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.physical_state}
+                        </div>
+                    )}
                 </div>
                 <div>
-                    <div className="mb-2">介质类型 <span className="text-red-500">*</span></div>
+                    <div className="mb-2">
+                        介质类型 <span className="text-red-500">*</span>
+                    </div>
                     <Select
                         className="w-full"
                         placeholder="请选择介质类型"
@@ -161,7 +205,11 @@ const AddEdit = ({ record, onChange }) => {
                         showSearch
                         optionFilterProp="label"
                     />
-                    {errors.medium_type_id && <div className="text-red-500 text-sm mt-1">{errors.medium_type_id}</div>}
+                    {errors.medium_type_id && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.medium_type_id}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -171,7 +219,9 @@ const AddEdit = ({ record, onChange }) => {
                     <Input
                         placeholder="试剂标签编码"
                         value={record.lab_code || ""}
-                        onChange={(e) => updateField("lab_code", e.target.value)}
+                        onChange={(e) =>
+                            updateField("lab_code", e.target.value)
+                        }
                         maxLength={255}
                     />
                 </div>
@@ -180,7 +230,9 @@ const AddEdit = ({ record, onChange }) => {
                     <Input
                         placeholder="样品编码"
                         value={record.sample_code || ""}
-                        onChange={(e) => updateField("sample_code", e.target.value)}
+                        onChange={(e) =>
+                            updateField("sample_code", e.target.value)
+                        }
                         maxLength={255}
                     />
                 </div>
@@ -189,7 +241,9 @@ const AddEdit = ({ record, onChange }) => {
                     <Input
                         placeholder="批号"
                         value={record.batch_code || ""}
-                        onChange={(e) => updateField("batch_code", e.target.value)}
+                        onChange={(e) =>
+                            updateField("batch_code", e.target.value)
+                        }
                         maxLength={255}
                     />
                 </div>
@@ -197,7 +251,9 @@ const AddEdit = ({ record, onChange }) => {
 
             <div className="grid grid-cols-4 gap-4">
                 <div>
-                    <div className="mb-2">单位 <span className="text-red-500">*</span></div>
+                    <div className="mb-2">
+                        单位 <span className="text-red-500">*</span>
+                    </div>
                     <Input
                         placeholder="单位(g/mL等)"
                         value={record.unit || ""}
@@ -205,10 +261,16 @@ const AddEdit = ({ record, onChange }) => {
                         status={errors.unit ? "error" : ""}
                         maxLength={50}
                     />
-                    {errors.unit && <div className="text-red-500 text-sm mt-1">{errors.unit}</div>}
+                    {errors.unit && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.unit}
+                        </div>
+                    )}
                 </div>
                 <div>
-                    <div className="mb-2">规格 <span className="text-red-500">*</span></div>
+                    <div className="mb-2">
+                        规格 <span className="text-red-500">*</span>
+                    </div>
                     <InputNumber
                         className="w-full"
                         min={0}
@@ -217,10 +279,16 @@ const AddEdit = ({ record, onChange }) => {
                         onChange={(val) => updateField("specification", val)}
                         status={errors.specification ? "error" : ""}
                     />
-                    {errors.specification && <div className="text-red-500 text-sm mt-1">{errors.specification}</div>}
+                    {errors.specification && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.specification}
+                        </div>
+                    )}
                 </div>
                 <div>
-                    <div className="mb-2">余量 <span className="text-red-500">*</span></div>
+                    <div className="mb-2">
+                        余量 <span className="text-red-500">*</span>
+                    </div>
                     <InputNumber
                         className="w-full"
                         min={0}
@@ -229,10 +297,16 @@ const AddEdit = ({ record, onChange }) => {
                         onChange={(val) => updateField("remaining", val)}
                         status={errors.remaining ? "error" : ""}
                     />
-                    {errors.remaining && <div className="text-red-500 text-sm mt-1">{errors.remaining}</div>}
+                    {errors.remaining && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.remaining}
+                        </div>
+                    )}
                 </div>
                 <div>
-                    <div className="mb-2">报警阈值 <span className="text-red-500">*</span></div>
+                    <div className="mb-2">
+                        报警阈值 <span className="text-red-500">*</span>
+                    </div>
                     <InputNumber
                         className="w-full"
                         min={0}
@@ -241,7 +315,11 @@ const AddEdit = ({ record, onChange }) => {
                         onChange={(val) => updateField("alert_threshold", val)}
                         status={errors.alert_threshold ? "error" : ""}
                     />
-                    {errors.alert_threshold && <div className="text-red-500 text-sm mt-1">{errors.alert_threshold}</div>}
+                    {errors.alert_threshold && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.alert_threshold}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -265,7 +343,9 @@ const AddEdit = ({ record, onChange }) => {
                         max={100}
                         placeholder="质量浓度"
                         value={record.mass_concentration}
-                        onChange={(val) => updateField("mass_concentration", val)}
+                        onChange={(val) =>
+                            updateField("mass_concentration", val)
+                        }
                     />
                 </div>
                 <div>
@@ -276,7 +356,9 @@ const AddEdit = ({ record, onChange }) => {
                         max={100}
                         placeholder="介质浓度"
                         value={record.medium_concentration}
-                        onChange={(val) => updateField("medium_concentration", val)}
+                        onChange={(val) =>
+                            updateField("medium_concentration", val)
+                        }
                     />
                 </div>
             </div>
@@ -287,7 +369,9 @@ const AddEdit = ({ record, onChange }) => {
                     <Input
                         placeholder="存放地点"
                         value={record.location || ""}
-                        onChange={(e) => updateField("location", e.target.value)}
+                        onChange={(e) =>
+                            updateField("location", e.target.value)
+                        }
                         maxLength={255}
                     />
                 </div>
@@ -296,8 +380,14 @@ const AddEdit = ({ record, onChange }) => {
                     <DatePicker
                         className="w-full"
                         placeholder="定值日期"
-                        value={record.confirmed_at ? dayjs(record.confirmed_at) : null}
-                        onChange={(date, dateString) => updateField("confirmed_at", dateString)}
+                        value={
+                            record.confirmed_at
+                                ? dayjs(record.confirmed_at)
+                                : null
+                        }
+                        onChange={(date, dateString) =>
+                            updateField("confirmed_at", dateString)
+                        }
                     />
                 </div>
                 <div>
@@ -305,9 +395,17 @@ const AddEdit = ({ record, onChange }) => {
                     <DatePicker
                         className="w-full"
                         placeholder="有效期至"
-                        value={record.expiring_at ? dayjs(record.expiring_at) : null}
-                        onChange={(date, dateString) => updateField("expiring_at", dateString)}
-                        disabledDate={current => current && current < dayjs().startOf('day')}
+                        value={
+                            record.expiring_at
+                                ? dayjs(record.expiring_at)
+                                : null
+                        }
+                        onChange={(date, dateString) =>
+                            updateField("expiring_at", dateString)
+                        }
+                        disabledDate={(current) =>
+                            current && current < dayjs().startOf("day")
+                        }
                     />
                 </div>
             </div>

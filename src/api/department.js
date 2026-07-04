@@ -1,10 +1,10 @@
 import instance from './request';
 
-export const createDepartment = data => instance.post("/ResourceAdmin/Department/create", data);
-export const readDepartment = (params) => instance.get("/ResourceAdmin/Department/read", { params });
-export const updateDepartment = data => instance.post("/ResourceAdmin/Department/update", data);
-export const deleteDepartment = data => instance.post("/ResourceAdmin/Department/delete", data);
-export const comboDepartment = data => instance.post("/ResourceAdmin/Department/combo", data);
+export const createDepartment = data => instance.post("/SystemAdmin/Department/create", data);
+export const readDepartment = (params) => instance.get("/SystemAdmin/Department/read", { params });
+export const updateDepartment = data => instance.post("/SystemAdmin/Department/update", data);
+export const deleteDepartment = data => instance.post("/SystemAdmin/Department/delete", data);
+export const comboDepartment = data => instance.post("/SystemAdmin/Department/combo", data);
 
 // Department Manager Task APIs
 export const readDepartmentTask = data => instance.post("/DepartmentManager/Task/read", data);
@@ -15,6 +15,7 @@ export const readDepartmentSample = data => instance.post("/DepartmentManager/Sa
 export const updateDepartmentSample = data => instance.post("/DepartmentManager/Sample/update", data);
 export const deleteDepartmentSample = data => instance.post("/DepartmentManager/Sample/delete", data);
 export const referenceDepartmentSample = data => instance.post("/DepartmentManager/Sample/reference", data);
+export const comboDepartmentSample = data => instance.post("/DepartmentManager/Sample/combo", data);
 
 // Department Manager Sample Input/Item/Method APIs
 export const inputCreateDepartmentSample = data => instance.post("/DepartmentManager/Sample/inputCreate", data);

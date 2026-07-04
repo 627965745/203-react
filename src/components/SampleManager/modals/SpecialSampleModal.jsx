@@ -1,21 +1,35 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Form, Input, InputNumber, Select, message, Space, Divider } from "antd";
-import { ExperimentOutlined, BlockOutlined, StarOutlined, RetweetOutlined } from "@ant-design/icons";
+import {
+    Modal,
+    Form,
+    Input,
+    InputNumber,
+    Select,
+    message,
+    Space,
+    Divider,
+} from "antd";
+import {
+    ExperimentOutlined,
+    BlockOutlined,
+    StarOutlined,
+    RetweetOutlined,
+} from "@ant-design/icons";
 
-const SpecialSampleModal = ({ 
-    open, 
-    onCancel, 
-    onSuccess, 
+const SpecialSampleModal = ({
+    open,
+    onCancel,
+    onSuccess,
     taskId,
-    apis = {}
+    apis = {},
 }) => {
     const {
         referenceSample,
         readSample,
         comboTask,
-        comboReferenceMaterial // Optional if we want to pass it
+        comboReferenceMaterial, // Optional if we want to pass it
     } = apis;
-    
+
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [refOptions, setRefOptions] = useState([]);
@@ -24,17 +38,18 @@ const SpecialSampleModal = ({
     const [refLoading, setRefLoading] = useState(false);
     const [parentLoading, setParentLoading] = useState(false);
     const [taskLoading, setTaskLoading] = useState(false);
+    const [tasks, setTasks] = useState([]);
 
-    const type = Form.useWatch('type', form);
-    const selectedTaskId = Form.useWatch('task_id', form);
+    const type = Form.useWatch("type", form);
+    const selectedTaskId = Form.useWatch("task_id", form);
 
     useEffect(() => {
         if (open) {
             form.resetFields();
-            form.setFieldsValue({ 
+            form.setFieldsValue({
                 task_id: taskId,
                 count: 1,
-                type: 1 
+                type: 1,
             });
             fetchTasks();
         }
@@ -49,18 +64,22 @@ const SpecialSampleModal = ({
         }
     }, [open, type, selectedTaskId]);
 
-
     const fetchTasks = async () => {
         setTaskLoading(true);
         try {
             const res = await comboTask();
-            if (res.data.status === 0 || res.data.code === 0) {
+            if (res.data.status === 0) {
                 const rawData = res.data.data;
-                const list = Array.isArray(rawData) ? rawData : (rawData?.rows || []);
-                setTaskOptions(list.map(t => ({
-                    label: `${t.name || t.task_name} (#${t.id})`,
-                    value: t.id
-                })));
+                const list = Array.isArray(rawData)
+                    ? rawData
+                    : rawData?.rows || [];
+                setTasks(list);
+                setTaskOptions(
+                    list.map((t) => ({
+                        label: `${t.name || t.task_name} (#${t.id})`,
+                        value: t.id,
+                    })),
+                );
             }
         } catch (error) {
             console.error("Fetch tasks error:", error);
@@ -73,13 +92,17 @@ const SpecialSampleModal = ({
         setRefLoading(true);
         try {
             const res = await comboReferenceMaterial({});
-            if (res.data.status === 0 || res.data.code === 0) {
+            if (res.data.status === 0) {
                 const rawData = res.data.data;
-                const list = Array.isArray(rawData) ? rawData : (rawData?.rows || []);
-                setRefOptions(list.map(r => ({
-                    label: `${r.name} (${r.lab_code || r.batch_code || '无编号'})`,
-                    value: r.id
-                })));
+                const list = Array.isArray(rawData)
+                    ? rawData
+                    : rawData?.rows || [];
+                setRefOptions(
+                    list.map((r) => ({
+                        label: `${r.name} (序号：${r.lab_code || r.batch_code || r.id || "无编号"})`,
+                        value: r.id,
+                    })),
+                );
             }
         } catch (error) {
             console.error("Fetch reference materials error:", error);
@@ -92,14 +115,33 @@ const SpecialSampleModal = ({
         if (!tId) return;
         setParentLoading(true);
         try {
-            // Only fetch type=0 (ordinary) samples
-            const res = await readSample({ task_id: tId, type: 0, limit: 1000 });
-            if (res.data.status === 0 || res.data.code === 0) {
-                const rows = res.data.data?.rows || [];
-                setParentOptions(rows.map(s => ({
-                    label: `${s.client_code} (${s.lab_code})`,
-                    value: s.id
-                })));
+            // Call the combo API (eats task_id)
+            const res = await readSample({
+                task_id: tId,
+            });
+            if (res.data.status === 0) {
+                const rawData = res.data.data;
+                const rows = Array.isArray(rawData) ? rawData : (rawData?.rows || []);
+                // Filter out non-ordinary samples locally (type 0 is ordinary sample)
+                const ordinarySamples = rows.filter(s => s.type === 0 || s.type === undefined);
+
+                const currentTask = tasks.find((t) => t.id == tId);
+                const taskLabCode = currentTask?.lab_code || "";
+
+                setParentOptions(
+                    ordinarySamples.map((s) => {
+                        const prefix = taskLabCode || s.task_lab_code || "";
+                        const sequence =
+                            s.lab_code?.toString().padStart(4, "0") || "";
+                        const sampleCode = prefix
+                            ? `${prefix}-${sequence}`
+                            : sequence;
+                        return {
+                            label: sampleCode,
+                            value: s.id,
+                        };
+                    }),
+                );
             }
         } catch (error) {
             console.error("Fetch parent samples error:", error);
@@ -108,13 +150,16 @@ const SpecialSampleModal = ({
         }
     };
 
-
     const handleOk = async () => {
         try {
             const values = await form.validateFields();
             setLoading(true);
+            if (typeof referenceSample !== "function") {
+                message.error("未配置添加特殊样品 API");
+                return;
+            }
             const res = await referenceSample(values);
-            if (res.data.status === 0 || res.data.code === 0) {
+            if (res.data.status === 0) {
                 message.success("添加特殊样品成功");
                 onSuccess();
             } else {
@@ -122,6 +167,10 @@ const SpecialSampleModal = ({
             }
         } catch (error) {
             console.error("Submit special sample error:", error);
+            if (error?.errorFields) {
+                return;
+            }
+            message.error(error?.message || "添加特殊样品时发生异常");
         } finally {
             setLoading(false);
         }
@@ -173,9 +222,27 @@ const SpecialSampleModal = ({
                     >
                         <Select
                             options={[
-                                { label: '空白样', value: 1, icon: <BlockOutlined className="text-gray-400" /> },
-                                { label: '标准样', value: 2, icon: <StarOutlined className="text-purple-400" /> },
-                                { label: '重复样', value: 3, icon: <RetweetOutlined className="text-orange-400" /> },
+                                {
+                                    label: "空白样",
+                                    value: 1,
+                                    icon: (
+                                        <BlockOutlined className="text-gray-400" />
+                                    ),
+                                },
+                                {
+                                    label: "标准样",
+                                    value: 2,
+                                    icon: (
+                                        <StarOutlined className="text-purple-400" />
+                                    ),
+                                },
+                                {
+                                    label: "重复样",
+                                    value: 3,
+                                    icon: (
+                                        <RetweetOutlined className="text-orange-400" />
+                                    ),
+                                },
                             ]}
                             optionRender={(option) => (
                                 <Space>
@@ -195,13 +262,12 @@ const SpecialSampleModal = ({
                     >
                         <InputNumber min={1} className="w-full" precision={0} />
                     </Form.Item>
-                    
+
                     {/* Placeholder for alignment if needed, or leave empty */}
                     <div></div>
                 </div>
 
                 <Divider className="my-1" />
-
 
                 {type === 2 && (
                     <Form.Item
@@ -235,13 +301,10 @@ const SpecialSampleModal = ({
                     </Form.Item>
                 )}
 
-                <Form.Item
-                    label="描述"
-                    name="description"
-                >
-                    <Input.TextArea 
-                        placeholder="请输入描述信息" 
-                        rows={3} 
+                <Form.Item label="描述" name="description">
+                    <Input.TextArea
+                        placeholder="请输入描述信息"
+                        rows={3}
                         maxLength={255}
                         showCount
                     />

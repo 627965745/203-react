@@ -60,7 +60,8 @@ const UserList = () => {
                 key: "arrangeRoles",
                 label: "批量关联角色",
                 icon: <LinkOutlined />,
-                primary: true,
+                type: "default",
+                className: "font-bold",
                 onClick: (rows, { clearSelection }) => {
                     setBatchRows(rows);
                     clearBatchRef.current = clearSelection;
@@ -146,12 +147,12 @@ const UserList = () => {
             {
                 title: "序号",
                 dataIndex: "id",
-                width: "5%",
+                width: 50,
                 align: "center",
             },
             {
                 title: "用户/登录名",
-                width: "15%",
+                width: 120,
                 render: (_, record) => (
                     <div className="flex flex-col">
                         <span className="font-bold text-blue-600">
@@ -166,17 +167,18 @@ const UserList = () => {
             {
                 title: "部门",
                 dataIndex: "department_name",
-                width: "12%",
+                width: 130,
+                ellipsis: true,
                 render: (text) => (
-                    <div className="flex items-center gap-1">
-                        <EnvironmentOutlined className="text-gray-400" />
-                        <span>{text}</span>
+                    <div className="flex items-center gap-1 min-w-0">
+                        <EnvironmentOutlined className="text-gray-400 shrink-0" />
+                        <span className="truncate">{text}</span>
                     </div>
                 ),
             },
             {
                 title: "类型",
-                width: "10%",
+                width: 90,
                 align: "center",
                 render: (_, record) =>
                     record.is_manager === 1 ? (
@@ -187,7 +189,7 @@ const UserList = () => {
             },
             {
                 title: "实名/证件/联系",
-                width: "25%",
+                width: 150,
                 render: (_, record) => (
                     <div className="text-[11px] leading-tight">
                         <div className="mb-0.5">
@@ -208,7 +210,7 @@ const UserList = () => {
             {
                 title: "拥有角色",
                 dataIndex: "roles",
-                width: "20%",
+                width: 220,
                 render: (roles) => (
                     <div className="flex flex-wrap gap-1">
                         {roles?.map((r) => (
@@ -231,7 +233,7 @@ const UserList = () => {
             {
                 title: "启用状态",
                 dataIndex: "enabled",
-                width: "10%",
+                width: 90,
                 align: "center",
                 render: (val, record) => (
                     <Switch
@@ -264,7 +266,7 @@ const UserList = () => {
     );
 
     const renderExpandedRow = (record) => (
-        <div className="p-4 bg-gray-50 rounded-lg">
+        <div className="bg-gray-50 rounded-lg">
             <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
                 额外详情内容
             </h4>
@@ -302,6 +304,7 @@ const UserList = () => {
                 columns={columns}
                 api={api}
                 AddEditForm={AddEdit}
+                actionWidth={240}
                 batchActions={batchActions}
                 renderExpandedRow={renderExpandedRow}
                 renderActions={(record) => (

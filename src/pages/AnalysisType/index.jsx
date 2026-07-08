@@ -8,17 +8,19 @@ const AnalysisTypeList = () => {
         {
             title: "ID",
             dataIndex: "id",
-            width: "10%",
+            width: 70,
+            align: "center",
         },
         {
             title: "类型名称",
             dataIndex: "name",
-            width: "50%",
+            ellipsis: true,
         },
         {
             title: "创建时间",
             dataIndex: "created_at",
-            width: "25%",
+            width: 160,
+            align: "center",
             render: text => text || '-',
         }
     ];

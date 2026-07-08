@@ -5,6 +5,8 @@ export const checkUser = (config = {}) => instance.get("/Common/User/check", con
 export const getLoginUserInfo = () => instance.get("/Common/User/info");
 export const logout = () => instance.get("/Common/User/logout");
 export const userReset = data => instance.post("/Common/User/reset", data);
+export const uploadFile = data => instance.post("/Common/Upload/upload", data);
+export const readFile = data => instance.post("/Common/Share/read", data);
 export const getCaptcha = (config = {}) => instance.get(`/Common/Captcha/get?t=${new Date().getTime()}`, config);
 
 

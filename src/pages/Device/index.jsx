@@ -1,16 +1,5 @@
 import React, { useState, useMemo, useRef } from "react";
-import {
-    Switch,
-    message,
-    Tooltip,
-    Tag,
-    Button,
-    Modal,
-    Form,
-    Input,
-    DatePicker,
-    Space,
-} from "antd";
+import { Switch, message, Tag, Button, Form, DatePicker, Space } from "antd";
 import { SafetyCertificateOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useAuth } from "../../contexts/AuthContext";
@@ -23,6 +12,8 @@ import {
     calibrateDevice,
 } from "../../api/device";
 import AddEdit from "./AddEdit";
+import CalibrateModal from "./CalibrateModal";
+import BatchCalibrateModal from "./BatchCalibrateModal";
 
 const DeviceList = () => {
     const { user } = useAuth();
@@ -50,7 +41,8 @@ const DeviceList = () => {
                 key: "batchCalibrate",
                 label: "批量校准",
                 icon: <SafetyCertificateOutlined />,
-                primary: true,
+                type: "default",
+                className: "font-bold",
                 onClick: (rows, { clearSelection }) => {
                     setBatchRows(rows);
                     clearBatchRef.current = clearSelection;
@@ -146,11 +138,12 @@ const DeviceList = () => {
         {
             title: "设备名称/分类",
             key: "name_category",
-            width: "15%",
+            width: 180,
+            ellipsis: true,
             render: (_, record) => (
-                <div>
-                    <div className="font-bold">{record.name}</div>
-                    <div className="text-xs text-gray-400">
+                <div className="min-w-0">
+                    <div className="font-bold truncate" title={record.name}>{record.name}</div>
+                    <div className="text-xs text-gray-400 truncate">
                         {record.category_name}
                     </div>
                 </div>
@@ -159,7 +152,8 @@ const DeviceList = () => {
         {
             title: "供应商/型号",
             key: "vendor_model",
-            width: "15%",
+            width: 170,
+            ellipsis: false,
             render: (_, record) => (
                 <div className="text-sm">
                     {record.vendor || "-"} / {record.model || "-"}
@@ -169,7 +163,7 @@ const DeviceList = () => {
         {
             title: "资产/序列号",
             key: "codes",
-            width: "15%",
+            width: 160,
             render: (_, record) => (
                 <div className="text-xs">
                     <div>资产: {record.asset_code || "-"}</div>
@@ -180,13 +174,13 @@ const DeviceList = () => {
         {
             title: "负责人",
             dataIndex: "maintainer_name",
-            width: "10%",
+            width: 110,
             render: (text) => <Tag color="blue">{text || "-"}</Tag>,
         },
         {
             title: "状态",
             dataIndex: "enabled",
-            width: "8%",
+            width: 80,
             align: "center",
             render: (enabled, record) => (
                 <Switch
@@ -199,7 +193,7 @@ const DeviceList = () => {
         {
             title: "到期时间",
             dataIndex: "expired_by",
-            width: "12%",
+            width: 150,
             render: (text) => {
                 const isNoRecord = text === "无校准记录";
                 return (
@@ -218,7 +212,7 @@ const DeviceList = () => {
         {
             title: "相关日期",
             key: "dates",
-            width: "12%",
+            width: 170,
             render: (_, record) => (
                 <div className="text-xs text-gray-500">
                     <div>出厂: {record.manufactured_at || "-"}</div>
@@ -273,6 +267,7 @@ const DeviceList = () => {
                 AddEditForm={AddEdit}
                 initialValues={initialValues}
                 modalWidth={800}
+                actionWidth={190}
                 batchActions={batchActions}
                 actionExtra={
                     <Space
@@ -370,13 +365,13 @@ const DeviceList = () => {
                     </Space>
                 }
                 renderExpandedRow={(record) => (
-                    <div className="p-4 bg-gray-50 rounded border border-gray-100 flex flex-col gap-4">
+                    <div className="p-2 bg-gray-50 rounded flex flex-col gap-4">
                         <div className="flex gap-12">
                             <div>
                                 <div className="text-gray-400 text-xs mb-1">
                                     出厂编号
                                 </div>
-                                <div className="text-sm">
+                                <div className="text-xs">
                                     {record.factory_code || "暂无"}
                                 </div>
                             </div>
@@ -384,7 +379,7 @@ const DeviceList = () => {
                                 <div className="text-gray-400 text-xs mb-1">
                                     校准周期
                                 </div>
-                                <div className="text-sm">
+                                <div className="text-xs">
                                     {record.calibration_interval} 天
                                 </div>
                             </div>
@@ -392,7 +387,7 @@ const DeviceList = () => {
                                 <div className="text-gray-400 text-xs mb-1">
                                     创建时间
                                 </div>
-                                <div className="text-sm">
+                                <div className="text-xs">
                                     {record.created_at || "-"}
                                 </div>
                             </div>
@@ -400,7 +395,7 @@ const DeviceList = () => {
                                 <div className="text-gray-400 text-xs mb-1">
                                     更新时间
                                 </div>
-                                <div className="text-sm">
+                                <div className="text-xs">
                                     {record.updated_at || "-"}
                                 </div>
                             </div>
@@ -408,7 +403,7 @@ const DeviceList = () => {
                                 <div className="text-gray-400 text-xs mb-1">
                                     备注
                                 </div>
-                                <div className="text-sm whitespace-pre-wrap">
+                                <div className="text-xs whitespace-pre-wrap">
                                     {record.description || "无"}
                                 </div>
                             </div>
@@ -425,7 +420,7 @@ const DeviceList = () => {
                                             .map((log, idx) => (
                                                 <Tag
                                                     key={idx}
-                                                    className="m-0 bg-white border-gray-200 text-[10px]"
+                                                    className="m-0 bg-white border-gray-200 text-[12px]"
                                                 >
                                                     {log.calibrated_at} (
                                                     {log.calibrator})
@@ -455,75 +450,26 @@ const DeviceList = () => {
                 )}
             />
 
-            <Modal
-                title={`设备校准 - ${calibrateModal.record?.name}`}
+            <CalibrateModal
                 open={calibrateModal.visible}
+                record={calibrateModal.record}
+                user={user}
+                form={form}
                 onCancel={() =>
                     setCalibrateModal({ visible: false, record: null })
                 }
-                onOk={() => form.submit()}
-                okText="确认校准"
-                cancelText="取消"
-                width={380} // Smaller size
-                destroyOnHidden
-            >
-                <Form
-                    form={form}
-                    layout="vertical"
-                    onFinish={handleCalibrate}
-                    initialValues={{
-                        calibrated_at: dayjs(),
-                    }}
-                    className="pt-4"
-                >
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded text-blue-600 text-sm">
-                        <strong>校准执行人:</strong>{" "}
-                        {user?.nickname || user?.name || "未知用户"}
-                    </div>
-                    <Form.Item
-                        name="calibrated_at"
-                        label="校准执行日期"
-                        rules={[{ required: true, message: "请选择校准日期" }]}
-                    >
-                        <DatePicker className="w-full" />
-                    </Form.Item>
-                </Form>
-            </Modal>
+                onSubmit={handleCalibrate}
+            />
 
-            <Modal
-                title={`批量校准 (${batchRows.length} 台设备)`}
+            <BatchCalibrateModal
                 open={batchCalibrateOpen}
+                count={batchRows.length}
+                user={user}
+                form={batchForm}
+                submitting={batchSubmitting}
                 onCancel={() => setBatchCalibrateOpen(false)}
-                onOk={() => batchForm.submit()}
-                okText="确认批量校准"
-                cancelText="取消"
-                confirmLoading={batchSubmitting}
-                width={420}
-                destroyOnHidden
-            >
-                <Form
-                    form={batchForm}
-                    layout="vertical"
-                    onFinish={handleBatchCalibrate}
-                    initialValues={{ calibrated_at: dayjs() }}
-                    className="pt-4"
-                >
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded text-blue-600 text-sm">
-                        <strong>校准执行人:</strong>{" "}
-                        {user?.nickname || user?.name || "未知用户"}
-                        <div className="mt-1 text-xs text-blue-400">
-                            将为所选 {batchRows.length} 台设备统一写入同一校准日期。
-                        </div>
-                    </div>
-                    <Form.Item
-                        name="calibrated_at"
-                        label="校准执行日期"
-                        rules={[{ required: true, message: "请选择校准日期" }]}
-                    >
-                        <DatePicker className="w-full" />
-                    </Form.Item>
-                </Form>
-            </Modal>
+                onSubmit={handleBatchCalibrate}
+            />
         </>
     );
 };

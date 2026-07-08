@@ -138,21 +138,21 @@ const SampleListModal = ({ visible, task, onCancel }) => {
     );
 
     const renderExpandedRow = (record) => (
-        <div className="p-6 bg-slate-50/50 rounded-lg border border-slate-100 mx-4 mb-4 shadow-inner">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="p-3 bg-slate-50/50 rounded-lg border border-slate-100 mx-2 mb-2 shadow-inner">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Parameters Section - Redesigned as List */}
                 <div>
-                    <div className="flex items-center gap-2 mb-4 text-slate-700 font-bold">
+                    <div className="flex items-center gap-2 mb-2 text-slate-700 font-bold">
                         <TagOutlined className="text-blue-500" />
                         <span>样品参数</span>
                     </div>
                     {(record.inputs || []).length > 0 ? (
-                        <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm p-4">
+                        <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm p-2">
                             <div className="divide-y divide-slate-50">
                                 {record.inputs.map((item, idx) => (
                                     <div
                                         key={idx}
-                                        className="py-2.5 first:pt-0 last:pb-0 flex justify-between items-center text-sm"
+                                        className="py-1.5 first:pt-0 last:pb-0 flex justify-between items-center text-sm"
                                     >
                                         <span className="text-slate-500 flex items-center gap-2">
                                             <div className="w-1 h-1 bg-blue-400 rounded-full" />
@@ -166,7 +166,7 @@ const SampleListModal = ({ visible, task, onCancel }) => {
                             </div>
                         </div>
                     ) : (
-                        <div className="bg-white p-6 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
+                        <div className="bg-white p-3 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
                             <Empty
                                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                                 description="暂无参数"
@@ -177,22 +177,22 @@ const SampleListModal = ({ visible, task, onCancel }) => {
 
                 {/* Processing Methods Section - Redesigned as List */}
                 <div>
-                    <div className="flex items-center gap-2 mb-4 text-slate-700 font-bold">
+                    <div className="flex items-center gap-2 mb-2 text-slate-700 font-bold">
                         <DeploymentUnitOutlined className="text-indigo-500" />
                         <span>加工方法</span>
                     </div>
                     {(record.items || []).length > 0 ? (
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                             {record.items.map((item, idx) => (
                                 <div
                                     key={idx}
                                     className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
                                 >
-                                    <div className="bg-indigo-50/50 px-4 py-2 border-b border-indigo-100 flex justify-between items-center">
+                                    <div className="bg-indigo-50/50 px-3 py-1.5 border-b border-indigo-100 flex justify-between items-center">
                                         <div className="flex items-center gap-2">
                                             <Tag
                                                 color="indigo"
-                                                className="m-0 border-none rounded-lg px-4 py-1.5 flex items-center"
+                                                className="m-0 border-none rounded-lg px-3 py-1 flex items-center"
                                             >
                                                 <span
                                                     className="font-black text-xl text-indigo-700"
@@ -216,14 +216,14 @@ const SampleListModal = ({ visible, task, onCancel }) => {
                                             </div>
                                         )}
                                     </div>
-                                    <div className="p-3 px-4">
+                                    <div className="p-2 px-3">
                                         {(item.processing || []).length > 0 ? (
                                             <div className="divide-y divide-slate-50">
                                                 {item.processing.map(
                                                     (p, pIdx) => (
                                                         <div
                                                             key={pIdx}
-                                                            className="py-2 first:pt-0 last:pb-0 flex items-center text-sm"
+                                                            className="py-1 first:pt-0 last:pb-0 flex items-center text-sm"
                                                         >
                                                             <span className="text-slate-500 w-1/3">
                                                                 {p.method_name}
@@ -298,7 +298,7 @@ const SampleListModal = ({ visible, task, onCancel }) => {
                             ))}
                         </div>
                     ) : (
-                        <div className="bg-white p-6 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
+                        <div className="bg-white p-3 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
                             <Empty
                                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                                 description="暂无加工方法"
@@ -308,8 +308,8 @@ const SampleListModal = ({ visible, task, onCancel }) => {
                 </div>
             </div>
 
-            <Divider dashed className="my-4" />
-            <div className="flex items-center gap-6 text-[11px] text-gray-400">
+            <Divider dashed className="my-2" />
+            <div className="flex items-center gap-4 text-[11px] text-gray-400">
                 <Space>
                     <ClockCircleOutlined />
                     <span>创建于: {record.created_at}</span>

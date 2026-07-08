@@ -135,7 +135,7 @@ const DownloadTemplateModal = ({ open, onCancel, taskId, taskLabCode }) => {
                 const blob = new Blob([res.data], {
                     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 });
-                const fileName = `ResultTemplate.xlsx`;
+                const fileName = `数据录入模板.xlsx`;
 
                 if ("showSaveFilePicker" in window) {
                     try {
@@ -209,9 +209,9 @@ const DownloadTemplateModal = ({ open, onCancel, taskId, taskLabCode }) => {
             onOk={handleDownload}
             confirmLoading={downloading}
             width={600}
-            destroyOnClose
+            destroyOnHidden
         >
-            <Spin spinning={loading} tip="正在加载选项...">
+            <Spin spinning={loading} description="正在加载选项...">
                 <Form
                     form={form}
                     layout="vertical"

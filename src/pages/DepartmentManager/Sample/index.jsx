@@ -1,30 +1,42 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Button, Tag, Space, Layout, Drawer, Table, Tooltip, message, Empty, Spin, Divider } from "antd";
-import { 
-    BarcodeOutlined, 
-    UserOutlined, 
-    ExperimentOutlined, 
-    InboxOutlined, 
-    PlusOutlined, 
+import {
+    Button,
+    Tag,
+    Space,
+    Layout,
+    Drawer,
+    Table,
+    Tooltip,
+    message,
+    Empty,
+    Spin,
+    Divider,
+} from "antd";
+import {
+    BarcodeOutlined,
+    UserOutlined,
+    ExperimentOutlined,
+    InboxOutlined,
+    PlusOutlined,
     HistoryOutlined,
-    InfoCircleOutlined, 
-    StarOutlined, 
-    BlockOutlined, 
+    InfoCircleOutlined,
+    StarOutlined,
+    BlockOutlined,
     RetweetOutlined,
-    ProjectOutlined, 
-    SettingOutlined, 
+    ProjectOutlined,
+    SettingOutlined,
     NumberOutlined,
     FileSearchOutlined,
     ExportOutlined,
-    MenuUnfoldOutlined
+    MenuUnfoldOutlined,
 } from "@ant-design/icons";
 import CrudTable from "../../../components/CrudTable";
-import { 
-    readDepartmentTask, 
+import {
+    readDepartmentTask,
     exportDepartmentTask,
-    readDepartmentSample, 
+    readDepartmentSample,
     comboDepartmentSample,
-    updateDepartmentSample, 
+    updateDepartmentSample,
     deleteDepartmentSample,
     referenceDepartmentSample,
     inputCreateDepartmentSample,
@@ -39,11 +51,13 @@ import {
     helperDeleteDepartmentSample,
     approveDepartmentSample,
     rejectDepartmentSample,
-    rollbackDepartmentSample
+    rollbackDepartmentSample,
 } from "../../../api/department";
 import { comboUser } from "../../../api/user";
 import { comboReferenceMaterial } from "../../../api/referenceMaterial";
-import SampleBatchModal, { getOperations } from "../../../components/SampleManager/modals/SampleBatchModal";
+import SampleBatchModal, {
+    getOperations,
+} from "../../../components/SampleManager/modals/SampleBatchModal";
 import AddEdit from "../../../components/SampleManager/AddEdit";
 import DetailDrawer from "../../../components/SampleManager/DetailDrawer";
 import SpecialSampleModal from "../../../components/SampleManager/modals/SpecialSampleModal";
@@ -62,7 +76,7 @@ const DepartmentSampleList = () => {
     const [selectedTask, setSelectedTask] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
     const [samples, setSamples] = useState([]);
-    
+
     // Task Drawer states
     const [taskDrawerVisible, setTaskDrawerVisible] = useState(true);
     const [taskLoading, setTaskLoading] = useState(false);
@@ -100,32 +114,35 @@ const DepartmentSampleList = () => {
     );
 
     // API injection for generic components
-    const departmentApis = useMemo(() => ({
-        readSample: comboDepartmentSample,
-        inputCreate: inputCreateDepartmentSample,
-        inputUpdate: inputUpdateDepartmentSample,
-        inputDelete: inputDeleteDepartmentSample,
-        itemCreate: itemCreateDepartmentSample,
-        itemDelete: itemDeleteDepartmentSample,
-        methodCreate: methodCreateDepartmentSample,
-        methodDelete: methodDeleteDepartmentSample,
-        // Enable distribution for department members (Department Head to Inspector)
-        distribute: distributeDepartmentSample,
-        helperCreate: helperCreateDepartmentSample,
-        helperDelete: helperDeleteDepartmentSample,
-        comboRecipient: comboUser,
-        hideDistribute: false, 
-        distributeType: 'inspector', // Department Head view
-        approveMethod: approveDepartmentSample,
-        rejectMethod: rejectDepartmentSample,
-        rollback: rollbackDepartmentSample,
-        
-        // Special sample APIs
-        referenceSample: referenceDepartmentSample,
-        comboTask: readDepartmentTask, // Use this for selection if no combo available
-        comboReferenceMaterial: comboReferenceMaterial,
-        onSuccess: () => setRefreshKey(prev => prev + 1)
-    }), []);
+    const departmentApis = useMemo(
+        () => ({
+            readSample: comboDepartmentSample,
+            inputCreate: inputCreateDepartmentSample,
+            inputUpdate: inputUpdateDepartmentSample,
+            inputDelete: inputDeleteDepartmentSample,
+            itemCreate: itemCreateDepartmentSample,
+            itemDelete: itemDeleteDepartmentSample,
+            methodCreate: methodCreateDepartmentSample,
+            methodDelete: methodDeleteDepartmentSample,
+            // Enable distribution for department members (Department Head to Inspector)
+            distribute: distributeDepartmentSample,
+            helperCreate: helperCreateDepartmentSample,
+            helperDelete: helperDeleteDepartmentSample,
+            comboRecipient: comboUser,
+            hideDistribute: false,
+            distributeType: "inspector", // Department Head view
+            approveMethod: approveDepartmentSample,
+            rejectMethod: rejectDepartmentSample,
+            rollback: rollbackDepartmentSample,
+
+            // Special sample APIs
+            referenceSample: referenceDepartmentSample,
+            comboTask: readDepartmentTask, // Use this for selection if no combo available
+            comboReferenceMaterial: comboReferenceMaterial,
+            onSuccess: () => setRefreshKey((prev) => prev + 1),
+        }),
+        [],
+    );
 
     useEffect(() => {
         fetchTasks();
@@ -150,32 +167,35 @@ const DepartmentSampleList = () => {
         setTaskId(record.id);
         setSelectedTask(record);
         setTaskDrawerVisible(false);
-        setRefreshKey(prev => prev + 1);
+        setRefreshKey((prev) => prev + 1);
     }, []);
 
-    const renderActions = useCallback((record) => (
-        <Button 
-            type="link" 
-            size="small" 
-            icon={<SettingOutlined />} 
-            onClick={() => {
-                setActiveSampleId(record.id);
-                setDetailVisible(true);
-            }}
-        >
-            详情管理
-        </Button>
-    ), []);
+    const renderActions = useCallback(
+        (record) => (
+            <Button
+                type="link"
+                size="small"
+                icon={<SettingOutlined />}
+                onClick={() => {
+                    setActiveSampleId(record.id);
+                    setDetailVisible(true);
+                }}
+            >
+                详情管理
+            </Button>
+        ),
+        [],
+    );
 
     const handleExportTask = async (id) => {
         const hide = message.loading("正在准备导出数据...", 0);
         try {
             const res = await exportDepartmentTask({ id });
             hide();
-            
+
             // If response is a blob, check if it's actually a JSON error message
             if (res.data instanceof Blob) {
-                if (res.data.type === 'application/json') {
+                if (res.data.type === "application/json") {
                     const text = await res.data.text();
                     const errorData = JSON.parse(text);
                     message.error(errorData.message || "导出失败");
@@ -183,9 +203,9 @@ const DepartmentSampleList = () => {
                 }
 
                 const url = window.URL.createObjectURL(new Blob([res.data]));
-                const link = document.createElement('a');
+                const link = document.createElement("a");
                 link.href = url;
-                link.setAttribute('download', `Task_${id}_Export.xlsx`);
+                link.setAttribute("download", `Task_${id}_Export.xlsx`);
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
@@ -203,114 +223,165 @@ const DepartmentSampleList = () => {
         }
     };
 
-    const columns = useMemo(() => [
-        {
-            title: "样品编号",
-            dataIndex: "lab_code",
-            width: 160,
-            fixed: 'left',
-            render: (text, record) => (
-                <div className="flex items-center gap-2">
-                    <BarcodeOutlined className="text-blue-500" />
-                    <span className="font-mono font-bold text-blue-600">{selectedTask?.lab_code}-{text?.toString().padStart(4, '0')}</span>
-                    {record.description && (
-                        <Tooltip title={record.description}>
-                            <InfoCircleOutlined className="text-blue-300 hover:text-blue-500 ml-1" />
-                        </Tooltip>
-                    )}
-                </div>
-            )
-        },
-        {
-            title: "样品类型",
-            dataIndex: "type",
-            width: 120,
-            render: (type) => {
-                const cfg = SampleTypeMap[type] || SampleTypeMap[0];
-                return (
-                    <Tag icon={cfg.icon} color={cfg.color} className="border-none font-bold">
-                        {cfg.label}
-                    </Tag>
-                );
-            }
-        },
-        {
-            title: "创建人",
-            dataIndex: "creator_name",
-            width: 160,
-            render: (name, record) => {
-                const isNotSelfCreated = record.creator_id === null || record.creator_id === undefined || record.creator_name === null || record.creator_name === undefined;
-                return (
-                    <Space>
-                        <UserOutlined className="text-gray-400" />
-                        <span>{isNotSelfCreated ? "非本人创建" : (name || '-')}</span>
-                    </Space>
-                );
-            }
-        },
-    ], [selectedTask]);
+    const columns = useMemo(
+        () => [
+            {
+                title: "样品编号",
+                dataIndex: "lab_code",
+                width: 160,
+                fixed: "left",
+                render: (text, record) => (
+                    <div className="flex items-center gap-2">
+                        <BarcodeOutlined className="text-blue-500" />
+                        <span className="font-mono font-bold text-blue-600">
+                            {selectedTask?.lab_code}-
+                            {text?.toString().padStart(4, "0")}
+                        </span>
+                        {record.description && (
+                            <Tooltip title={record.description}>
+                                <InfoCircleOutlined className="text-blue-300 hover:text-blue-500 ml-1" />
+                            </Tooltip>
+                        )}
+                    </div>
+                ),
+            },
+            {
+                title: "样品类型",
+                dataIndex: "type",
+                width: 120,
+                render: (type) => {
+                    const cfg = SampleTypeMap[type] || SampleTypeMap[0];
+                    return (
+                        <Tag
+                            icon={cfg.icon}
+                            color={cfg.color}
+                            className="border-none font-bold"
+                        >
+                            {cfg.label}
+                        </Tag>
+                    );
+                },
+            },
+            {
+                title: "创建人",
+                dataIndex: "creator_name",
+                width: 160,
+                render: (name, record) => {
+                    const isNotSelfCreated =
+                        record.creator_id === null ||
+                        record.creator_id === undefined ||
+                        record.creator_name === null ||
+                        record.creator_name === undefined;
+                    return (
+                        <Space>
+                            <UserOutlined className="text-gray-400" />
+                            <span>
+                                {isNotSelfCreated ? "非本人创建" : name || "-"}
+                            </span>
+                        </Space>
+                    );
+                },
+            },
+        ],
+        [selectedTask],
+    );
 
-    const sampleApi = useMemo(() => ({
-        read: (params) => {
-            if (!taskId) return Promise.resolve({ data: { status: 0, data: { rows: [], total: 0 } } });
-            return readDepartmentSample({ ...params, task_id: taskId });
-        },
-        // Only allow update/delete if creator_id matches (handled by backend but we can add UI hints)
-        update: updateDepartmentSample,
-        delete: deleteDepartmentSample
-    }), [taskId]);
+    const sampleApi = useMemo(
+        () => ({
+            read: (params) => {
+                if (!taskId)
+                    return Promise.resolve({
+                        data: { status: 0, data: { rows: [], total: 0 } },
+                    });
+                return readDepartmentSample({ ...params, task_id: taskId });
+            },
+            // Only allow update/delete if creator_id matches (handled by backend but we can add UI hints)
+            update: updateDepartmentSample,
+            delete: deleteDepartmentSample,
+        }),
+        [taskId],
+    );
 
-    const initialValues = useMemo(() => ({
-        task_id: taskId,
-        type: 0,
-        client_code: "",
-        description: ""
-    }), [taskId]);
+    const initialValues = useMemo(
+        () => ({
+            task_id: taskId,
+            type: 0,
+            client_code: "",
+            description: "",
+        }),
+        [taskId],
+    );
 
     const taskColumns = [
-        { 
-            title: "任务编号", 
-            dataIndex: "lab_code", 
-            width: 140, 
-            fixed: 'left',
-            render: t => <span className="font-mono font-bold text-blue-600">{t}</span> 
+        {
+            title: "任务编号",
+            dataIndex: "lab_code",
+            width: 140,
+            fixed: "left",
+            render: (t) => (
+                <span className="font-mono font-bold text-blue-600">{t}</span>
+            ),
         },
         { title: "任务名称", dataIndex: "name", width: 200, ellipsis: true },
-        { title: "委托客户", dataIndex: "client_name", width: 220, ellipsis: true },
+        {
+            title: "委托客户",
+            dataIndex: "client_name",
+            width: 220,
+            ellipsis: true,
+        },
         { title: "联系人", dataIndex: "liaison_name", width: 100 },
         { title: "联系电话", dataIndex: "liaison_contact", width: 130 },
-        { title: "样品类型", dataIndex: "sample_type_name", width: 150, ellipsis: true },
+        {
+            title: "样品类型",
+            dataIndex: "sample_type_name",
+            width: 150,
+            ellipsis: true,
+        },
         { title: "分析类型", dataIndex: "analysis_type_name", width: 120 },
-        { title: "截止日期", dataIndex: "deadline", width: 120, render: t => <Tag color="orange" className="m-0 border-none font-bold">{t}</Tag> },
+        {
+            title: "截止日期",
+            dataIndex: "deadline",
+            width: 120,
+            render: (t) => (
+                <Tag color="orange" className="m-0 border-none font-bold">
+                    {t}
+                </Tag>
+            ),
+        },
         { title: "收样人", dataIndex: "receiver_nickname", width: 100 },
-        { title: "创建时间", dataIndex: "created_at", width: 160, render: t => <span className="text-xs text-slate-400">{t}</span> },
+        {
+            title: "创建时间",
+            dataIndex: "created_at",
+            width: 160,
+            render: (t) => <span className="text-xs text-slate-400">{t}</span>,
+        },
         {
             title: "操作",
             key: "action",
             width: 150,
-            fixed: 'right',
+            fixed: "right",
             render: (_, record) => (
                 <Space>
-                    <Button 
-                        type="primary" 
-                        size="small" 
-                        icon={<ProjectOutlined />} 
+                    <Button
+                        type="primary"
+                        size="small"
+                        icon={<ProjectOutlined />}
                         onClick={() => handleSelectTask(record)}
                         className="rounded-lg font-bold shadow-sm"
                     >
                         管理样品
                     </Button>
                     <Tooltip title="导出任务数据">
-                        <Button 
-                            size="small" 
-                            icon={<ExportOutlined />} 
+                        <Button
+                            size="small"
+                            icon={<ExportOutlined />}
                             onClick={() => handleExportTask(record.id)}
                             className="rounded-lg"
                         />
                     </Tooltip>
                 </Space>
-            )
-        }
+            ),
+        },
     ];
 
     return (
@@ -324,13 +395,7 @@ const DepartmentSampleList = () => {
                     flex-direction: column;
                     overflow: hidden;
                 }
-                .task-table-wrapper .ant-table-thead > tr > th {
-                    background: #f8fafc;
-                    font-weight: 900;
-                    text-transform: uppercase;
-                    font-size: 11px;
-                    letter-spacing: 0.05em;
-                }
+
             `}</style>
 
             <Content className="bg-white flex flex-col h-full overflow-hidden">
@@ -339,13 +404,15 @@ const DepartmentSampleList = () => {
                         <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-6">
                             <FileSearchOutlined className="text-4xl text-blue-500" />
                         </div>
-                        <h2 className="text-3xl font-black text-slate-800 mb-4">欢迎使用科室任务管理</h2>
+                        <h2 className="text-3xl font-black text-slate-800 mb-4">
+                            欢迎使用科室任务管理
+                        </h2>
                         <p className="text-slate-400 text-lg max-w-md text-center">
                             请先从任务列表中选择一个具体任务，以进行样品的维护、检测项配置及数据录入。
                         </p>
-                        <Button 
-                            type="primary" 
-                            size="large" 
+                        <Button
+                            type="primary"
+                            size="large"
                             icon={<MenuUnfoldOutlined />}
                             onClick={() => setTaskDrawerVisible(true)}
                             className="mt-8 bg-blue-600 h-12 px-10 rounded-2xl shadow-xl shadow-blue-100 font-bold"
@@ -357,8 +424,8 @@ const DepartmentSampleList = () => {
                     <>
                         <div className="p-6 bg-white border-b border-gray-100 flex justify-between items-center shadow-sm flex-shrink-0">
                             <Space size="large">
-                                <Button 
-                                    icon={<MenuUnfoldOutlined />} 
+                                <Button
+                                    icon={<MenuUnfoldOutlined />}
                                     onClick={() => setTaskDrawerVisible(true)}
                                     className="rounded-xl font-bold"
                                     type="primary"
@@ -371,23 +438,32 @@ const DepartmentSampleList = () => {
                                         {selectedTask?.name}
                                     </span>
                                     <div className="flex items-center gap-2 mt-1">
-                                        <Tag color="blue" className="m-0 border-none font-mono">#{selectedTask?.lab_code}</Tag>
-                                        <span className="text-xs text-slate-400">客户: {selectedTask?.client_name}</span>
+                                        <Tag
+                                            color="blue"
+                                            className="m-0 border-none font-mono"
+                                        >
+                                            #{selectedTask?.lab_code}
+                                        </Tag>
+                                        <span className="text-xs text-slate-400">
+                                            客户: {selectedTask?.client_name}
+                                        </span>
                                     </div>
                                 </div>
                             </Space>
                             <Space>
-                                <Button 
-                                    icon={<ExportOutlined />} 
+                                <Button
+                                    icon={<ExportOutlined />}
                                     onClick={() => handleExportTask(taskId)}
                                     className="rounded-xl font-bold"
                                 >
                                     导出结果
                                 </Button>
-                                <Button 
-                                    type="primary" 
+                                <Button
+                                    type="primary"
                                     className="bg-blue-600 border-none shadow-lg shadow-blue-200 font-bold px-6 rounded-xl"
-                                    onClick={() => setRefreshKey(prev => prev + 1)}
+                                    onClick={() =>
+                                        setRefreshKey((prev) => prev + 1)
+                                    }
                                 >
                                     刷新
                                 </Button>
@@ -396,7 +472,7 @@ const DepartmentSampleList = () => {
 
                         <div className="p-6 flex-1 overflow-hidden sample-table-container">
                             <div className="bg-white h-full rounded-3xl overflow-y-auto flex flex-col">
-                                <CrudTable 
+                                <CrudTable
                                     className="min-h-0 pb-6"
                                     refreshKey={refreshKey}
                                     title={
@@ -404,13 +480,20 @@ const DepartmentSampleList = () => {
                                             <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
                                                 <BarcodeOutlined className="text-blue-600" />
                                             </div>
-                                            <span className="text-lg font-black text-slate-800">样品管理</span>
+                                            <span className="text-lg font-black text-slate-800">
+                                                样品管理
+                                            </span>
                                         </div>
                                     }
                                     entityName="样品"
                                     columns={columns}
                                     api={sampleApi}
-                                    AddEditForm={(props) => <AddEdit {...props} apis={departmentApis} />}
+                                    AddEditForm={(props) => (
+                                        <AddEdit
+                                            {...props}
+                                            apis={departmentApis}
+                                        />
+                                    )}
                                     initialValues={initialValues}
                                     modalWidth={500}
                                     hideAdd={true}
@@ -420,7 +503,11 @@ const DepartmentSampleList = () => {
                                         <Space>
                                             <Button
                                                 icon={<ExperimentOutlined />}
-                                                onClick={() => setSpecialSampleVisible(true)}
+                                                onClick={() =>
+                                                    setSpecialSampleVisible(
+                                                        true,
+                                                    )
+                                                }
                                                 className="rounded-xl font-bold border-purple-100 text-purple-600 bg-purple-50"
                                             >
                                                 添加特殊样品
@@ -429,13 +516,15 @@ const DepartmentSampleList = () => {
                                     }
                                     renderActions={renderActions}
                                     isRecordEditable={(record) => {
-                                        return record.creator_id !== null && 
-                                               record.creator_id !== undefined && 
-                                               record.creator_name !== null && 
-                                               record.creator_name !== undefined;
+                                        return (
+                                            record.creator_id !== null &&
+                                            record.creator_id !== undefined &&
+                                            record.creator_name !== null &&
+                                            record.creator_name !== undefined
+                                        );
                                     }}
                                     onDataLoaded={setSamples}
-                                    scroll={{ y: 'calc(100vh - 480px)' }}
+                                    scroll={{ y: "calc(100vh - 320px)" }}
                                 />
                             </div>
                         </div>
@@ -457,7 +546,7 @@ const DepartmentSampleList = () => {
                 className="task-drawer"
             >
                 <div className="task-table-wrapper p-4">
-                    <Table 
+                    <Table
                         dataSource={tasks}
                         columns={taskColumns}
                         loading={taskLoading}
@@ -467,19 +556,24 @@ const DepartmentSampleList = () => {
                             current: taskParams.page + 1,
                             pageSize: taskParams.rows,
                             total: totalTasks,
-                            onChange: (page, pageSize) => setTaskParams({ ...taskParams, page: page - 1, rows: pageSize })
+                            onChange: (page, pageSize) =>
+                                setTaskParams({
+                                    ...taskParams,
+                                    page: page - 1,
+                                    rows: pageSize,
+                                }),
                         }}
                     />
                 </div>
             </Drawer>
 
-            <DetailDrawer 
+            <DetailDrawer
                 visible={detailVisible}
                 onClose={(changed) => {
                     setDetailVisible(false);
-                    if (changed) setRefreshKey(prev => prev + 1);
+                    if (changed) setRefreshKey((prev) => prev + 1);
                 }}
-                sampleData={samples.find(s => s.id === activeSampleId)}
+                sampleData={samples.find((s) => s.id === activeSampleId)}
                 taskId={taskId}
                 taskLabCode={selectedTask?.lab_code}
                 apis={departmentApis}
@@ -494,7 +588,7 @@ const DepartmentSampleList = () => {
                 task={selectedTask}
                 onSuccess={() => {
                     setBatchModalOpen(false);
-                    setRefreshKey(prev => prev + 1);
+                    setRefreshKey((prev) => prev + 1);
                 }}
             />
 
@@ -504,7 +598,7 @@ const DepartmentSampleList = () => {
                 taskId={taskId}
                 onSuccess={() => {
                     setSpecialSampleVisible(false);
-                    setRefreshKey(prev => prev + 1);
+                    setRefreshKey((prev) => prev + 1);
                 }}
                 apis={departmentApis}
             />

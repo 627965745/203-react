@@ -15,7 +15,7 @@ import {
     PlusOutlined, DeleteOutlined, EditOutlined, SettingOutlined, 
     ToolOutlined, ExperimentOutlined, UserOutlined, ClockCircleOutlined,
     InfoCircleOutlined, CheckCircleOutlined, SendOutlined, TeamOutlined,
-    RollbackOutlined, AuditOutlined, DownloadOutlined
+    RollbackOutlined, AuditOutlined, DownloadOutlined, CalendarOutlined
 } from "@ant-design/icons";
 import { comboDepartment } from "../../api/department";
 import dayjs from "dayjs";
@@ -542,8 +542,8 @@ const DetailDrawer = ({
                                                                 {isEditable ? "精细化配置" : "查看配置详情"}
                                                             </Button>
                                                             {isEditable && (
-                                                                <Popconfirm title="确定移除此检测项（及其配置）吗？" onConfirm={() => handleItemDelete(item.item_id || item.id)}>
-                                                                    <Button type="text" danger icon={<DeleteOutlined />} size="small" />
+                                                                <Popconfirm title="确定移除此检测项（及其配置）吗？" onConfirm={() => handleItemDelete(item.item_id || item.id)} okText="确认删除" cancelText="取消" okButtonProps={{ danger: true }}>
+                                                                    <Button type="text" danger icon={<DeleteOutlined />} size="small">删除此项目</Button>
                                                                 </Popconfirm>
                                                             )}
                                                         </Space>
@@ -591,23 +591,34 @@ const DetailDrawer = ({
                                                                                 </Space>
                                                                                 <Space>
                                                                                     {!hideDistribute && (
-                                                                                        <Tooltip title={
-                                                                                            item.processing_status === 1 
-                                                                                                ? "前处理加工中，完成后方可指派" 
-                                                                                                : (m.status > 1 ? "该方法已指派" : (m.status === 0 ? "管理组尚未下发" : "指派检测员"))
-                                                                                        }>
+                                                                                        distributeType === 'inspector' ? (
+                                                                                            <Tooltip title={
+                                                                                                item.processing_status === 1 
+                                                                                                    ? "前处理加工中，完成后方可指派" 
+                                                                                                    : (m.status > 1 ? "该方法已指派" : (m.status === 0 ? "管理组尚未下发" : "指派检测员"))
+                                                                                            }>
+                                                                                                <Button 
+                                                                                                    type="primary" 
+                                                                                                    size="small" 
+                                                                                                    disabled={item.processing_status === 1 || m.status !== 1}
+                                                                                                    onClick={() => openDistributeModal(item, m)}
+                                                                                                    className="font-bold text-[11px] rounded-lg h-7"
+                                                                                                >
+                                                                                                    指派检测员
+                                                                                                </Button>
+                                                                                            </Tooltip>
+                                                                                        ) : (
                                                                                             <Button 
                                                                                                 type="primary" 
                                                                                                 size="small" 
-                                                                                                disabled={item.processing_status === 1 || (distributeType === 'inspector' ? m.status !== 1 : m.status !== 0)}
+                                                                                                disabled={item.processing_status === 1 || m.status !== 0}
                                                                                                 onClick={() => openDistributeModal(item, m)}
                                                                                                 className="font-bold text-[11px] rounded-lg h-7"
                                                                                             >
-                                                                                                {distributeType === 'inspector' ? '指派检测员' : '下发到科室'}
+                                                                                                下发到科室
                                                                                             </Button>
-                                                                                        </Tooltip>
+                                                                                        )
                                                                                     )}
-                                                                                    
                                                                                     {/* Review for Department Manager (status 3) or Workflow Manager (status 4) */}
                                                                                     {((distributeType === 'inspector' && m.status === 3 && !showResultEntry) || 
                                                                                       (distributeType === 'department' && m.status === 4)) && (
@@ -749,18 +760,23 @@ const DetailDrawer = ({
                                                                                                 icon={<DeleteOutlined />}
                                                                                                 className="font-bold text-[11px] h-7"
                                                                                             >
-                                                                                                删除
+                                                                                                删除此方法
                                                                                             </Button>
                                                                                         </Popconfirm>
                                                                                     )}
                                                                                 </Space>
                                                                             </div>
                                                                             
-                                                                            {(m.tester_name || m.helpers?.length > 0) && (
+                                                                            {(m.tester_name || m.helpers?.length > 0 || m.test_deadline) && (
                                                                                 <div className="flex flex-wrap gap-2 mt-2">
                                                                                     {m.tester_name && (
                                                                                         <Tag icon={<UserOutlined />} color="blue" className="m-0 border-none text-[10px] font-bold px-2 py-0.5 rounded-md">
                                                                                             主检: {m.tester_name}
+                                                                                        </Tag>
+                                                                                    )}
+                                                                                    {m.test_deadline && (
+                                                                                        <Tag icon={<CalendarOutlined />} color="warning" className="m-0 border-none text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                                                                            截止日期: {m.test_deadline}
                                                                                         </Tag>
                                                                                     )}
                                                                                     {m.helpers?.map(h => {

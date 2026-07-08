@@ -40,7 +40,8 @@ const TestItemList = () => {
                 key: "arrangeMethods",
                 label: "批量关联方法",
                 icon: <LinkOutlined />,
-                primary: true,
+                type: "default",
+                className: "font-bold",
                 onClick: (rows, { clearSelection }) => {
                     setBatchRows(rows);
                     clearBatchRef.current = clearSelection;
@@ -91,35 +92,36 @@ const TestItemList = () => {
             {
                 title: "序号",
                 dataIndex: "id",
-                width: "8%",
+                width: 70,
                 align: "center",
             },
             {
                 title: "检测项目名称",
                 dataIndex: "name",
-                width: "25%",
+                width: 220,
+                ellipsis: true,
                 render: (text) => (
-                    <div className="flex items-center gap-2">
-                        <TagOutlined className="text-blue-500" />
-                        <span className="font-bold text-blue-600">{text}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                        <TagOutlined className="text-blue-500 shrink-0" />
+                        <span className="font-bold text-blue-600 truncate">{text}</span>
                     </div>
                 ),
             },
             {
                 title: "检测类别",
                 dataIndex: "category_name",
-                width: "20%",
+                width: 160,
+                ellipsis: true,
                 render: (text) => (
-                    <div className="flex items-center gap-2">
-                        <FilterOutlined className="text-gray-400" />
-                        <span className="text-gray-600">{text}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                        <FilterOutlined className="text-gray-400 shrink-0" />
+                        <span className="text-gray-600 truncate">{text}</span>
                     </div>
                 ),
             },
             {
                 title: "已关联方法",
                 dataIndex: "methods",
-                width: "35%",
                 render: (methods) => (
                     <div className="flex flex-wrap gap-1">
                         {methods?.map((m) => (
@@ -162,6 +164,7 @@ const TestItemList = () => {
                 AddEditForm={AddEdit}
                 initialValues={initialValues}
                 modalWidth={500}
+                actionWidth={240}
                 batchActions={batchActions}
                 filterValues={{ category_id: categoryId }}
                 filterConfig={{

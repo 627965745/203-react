@@ -40,7 +40,7 @@ const ThermometerList = () => {
     {
       title: '设备信息',
       key: 'device_info',
-      width: '20%',
+      width: 180,
       render: (_, record) => (
         <div className="flex flex-col">
           <span className="font-bold text-gray-800">{record.name}</span>
@@ -51,7 +51,7 @@ const ThermometerList = () => {
     {
       title: '网络配置 (Modbus TCP)',
       key: 'network',
-      width: '25%',
+      width: 220,
       render: (_, record) => (
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-sm">
@@ -68,7 +68,7 @@ const ThermometerList = () => {
     {
       title: '实时数据',
       key: 'realtime',
-      width: '20%',
+      width: 200,
       render: (_, record) => (
         <Space size="middle">
           <Tooltip title="当前温度">
@@ -93,7 +93,7 @@ const ThermometerList = () => {
     {
       title: '状态',
       dataIndex: 'enabled',
-      width: '10%',
+      width: 80,
       align: 'center',
       render: (enabled, record) => (
         <Switch 
@@ -131,6 +131,7 @@ const ThermometerList = () => {
         AddEditForm={AddEdit}
         initialValues={initialValues}
         modalWidth={600}
+        actionWidth={190}
         searchPlaceholder="搜索设备名称..."
         renderActions={renderActions}
       />

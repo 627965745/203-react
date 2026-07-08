@@ -159,7 +159,7 @@ const ProcessingManager = () => {
     }), []);
 
     const renderExpandedRow = (record) => (
-        <div className="p-4 bg-slate-50/50 rounded-lg border border-slate-100 mx-4 mb-2">
+        <div className="rounded-lg border border-slate-100">
             <Descriptions size="small" column={2}>
                 <Descriptions.Item label={
                     <Space size={4}><ClockCircleOutlined className="text-gray-400" /><span>创建时间</span></Space>

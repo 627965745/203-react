@@ -85,13 +85,13 @@ const ReferenceMaterialList = () => {
         {
             title: "序号",
             dataIndex: "id",
-            width: "3%",
+            width: 60,
             align: "center",
         },
         {
             title: "名称",
             dataIndex: "name",
-            width: "12%",
+            width: 170,
             render: (text, record) => (
                 <div className="flex flex-col">
                     <Tooltip title={text} placement="topLeft">
@@ -133,7 +133,7 @@ const ReferenceMaterialList = () => {
         },
         {
             title: "分类/阶段/形态",
-            width: "10%",
+            width: 110,
             align: "center",
             render: (_, record) => (
                 <Space orientation="vertical" size={2} className="w-full">
@@ -160,7 +160,7 @@ const ReferenceMaterialList = () => {
         },
         {
             title: "存量/规格/单位/阈值",
-            width: "12%",
+            width: 170,
             render: (_, record) => {
                 const rem = Number(record.remaining) || 0;
                 const limit = Number(record.alert_threshold) || 0;
@@ -200,7 +200,7 @@ const ReferenceMaterialList = () => {
         },
         {
             title: "不确定度 / 质量浓度",
-            width: "10%",
+            width: 140,
             render: (_, record) => (
                 <div className="text-xs space-y-0.5">
                     <div className="flex justify-between w-full">
@@ -220,7 +220,7 @@ const ReferenceMaterialList = () => {
         },
         {
             title: "介质信息",
-            width: "10%",
+            width: 140,
             render: (_, record) => {
                 const mediumName =
                     record.medium_type_name ||
@@ -241,7 +241,7 @@ const ReferenceMaterialList = () => {
         },
         {
             title: "试剂标签编码",
-            width: "10%",
+            width: 130,
             render: (_, record) => (
                 <div className="text-xs">
                     <div className="text-gray-400 italic">
@@ -255,7 +255,7 @@ const ReferenceMaterialList = () => {
         },
         {
             title: "位置/单位",
-            width: "12%",
+            width: 150,
             render: (_, record) => (
                 <div className="text-xs">
                     <div className="text-indigo-600 font-medium truncate">
@@ -269,7 +269,7 @@ const ReferenceMaterialList = () => {
         },
         {
             title: "特殊操作",
-            width: "12%",
+            width: 150,
             fixed: "right",
             align: "center",
             render: (_, record) => (
@@ -307,8 +307,8 @@ const ReferenceMaterialList = () => {
     ];
 
     const renderExpandedRow = (record) => (
-        <div className="bg-slate-50 border-y border-slate-100 p-4">
-            <div className="grid grid-cols-4 gap-6 mb-4">
+        <div className="bg-slate-50 border-y border-slate-100">
+            <div className="grid grid-cols-4 gap-6">
                 <div className="bg-white p-2 rounded shadow-sm border border-slate-200">
                     <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">
                         样品编码
@@ -479,7 +479,7 @@ const ReferenceMaterialList = () => {
                 AddEditForm={AddEdit}
                 initialValues={initialValues}
                 modalWidth={870}
-                scroll={{ x: 1300 }}
+                scroll={{ x: 1420 }}
                 renderExpandedRow={renderExpandedRow}
                 filterValues={filters}
                 filterConfig={filterConfig}
@@ -501,7 +501,7 @@ const ReferenceMaterialList = () => {
                             wrap
                             className="bg-gray-50/80 p-1 px-2 rounded-md border border-gray-100"
                         >
-                            <Select
+                            {/* <Select
                                 style={{ width: 140 }}
                                 placeholder="介质过滤"
                                 allowClear
@@ -558,7 +558,7 @@ const ReferenceMaterialList = () => {
                                         value: Number(k),
                                     }),
                                 )}
-                            />
+                            /> */}
                         </Space>
                     </div>
                 }

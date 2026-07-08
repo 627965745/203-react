@@ -29,12 +29,16 @@ instance.interceptors.request.use(
     (config) => {
         // 确保非 GET 请求始终带有 Content-Type
         if (config.method !== 'get') {
-            if (!config.headers['Content-Type']) {
+            if (config.data instanceof FormData) {
+                // For FormData uploads, delete Content-Type so Axios/browser automatically
+                // generates the correct boundary header.
+                delete config.headers['Content-Type'];
+            } else if (!config.headers['Content-Type']) {
                 config.headers['Content-Type'] = 'application/json';
             }
             // 如果是 POST/PUT 等请求但没有数据，强制设置为空对象 {}
             // 否则 Axios 会因为没有 Body 而不发送 Content-Type
-            if (config.data === undefined || config.data === null) {
+            if ((config.data === undefined || config.data === null) && !(config.data instanceof FormData)) {
                 config.data = {};
             }
         }

@@ -13,13 +13,13 @@ const ReferenceMaterialMediumTypeList = () => {
         {
             title: "序号",
             dataIndex: "id",
-            width: "15%",
+            width: 70,
             align: "center",
         },
         {
             title: "类型名称",
             dataIndex: "name",
-            width: "50%",
+            ellipsis: true,
             render: (text) => <span className="font-semibold text-gray-800">{text}</span>
         }
     ];

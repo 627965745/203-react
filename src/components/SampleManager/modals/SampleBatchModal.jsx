@@ -12,6 +12,7 @@ import {
     Tag,
     Table as AntTable,
     Input,
+    Alert,
 } from "antd";
 import {
     ContainerOutlined,
@@ -125,6 +126,7 @@ const SampleBatchModal = ({
     const [itemOptions, setItemOptions] = useState([]);
     const [procOptions, setProcOptions] = useState([]);
     const [availableMethods, setAvailableMethods] = useState([]);
+    const [mcItemId, setMcItemId] = useState(null); // methodCreate: chosen item
 
     const [form] = Form.useForm();
 
@@ -144,6 +146,33 @@ const SampleBatchModal = ({
             return { disabled: true, note: " (非本人创建)" };
         return { disabled: false, note: "" };
     };
+
+    // methodCreate: the union of items across the (editable) selected samples,
+    // each carrying the ids of the samples that actually contain it. The item
+    // dropdown is limited to these; picking one reveals which samples lack it.
+    const methodCreateItems = useMemo(() => {
+        const map = new Map();
+        samples.forEach((s) => {
+            if (isSampleRestricted(s)) return;
+            (s.items || []).forEach((item) => {
+                const id = item.item_id || item.id;
+                const name = item.item_name || item.name;
+                if (!map.has(id))
+                    map.set(id, { itemId: id, itemName: name, sampleIds: [] });
+                map.get(id).sampleIds.push(s.id);
+            });
+        });
+        return Array.from(map.values());
+    }, [samples, module]);
+
+    // Samples the user selected that do NOT contain the chosen item (adding the
+    // method there would be a no-op) — surfaced as a warning.
+    const missingSamplesForItem = useMemo(() => {
+        if (!mcItemId) return [];
+        const entry = methodCreateItems.find((i) => i.itemId === mcItemId);
+        const withItem = new Set(entry?.sampleIds || []);
+        return samples.filter((s) => !withItem.has(s.id));
+    }, [mcItemId, methodCreateItems, samples]);
 
     // Resolve APIs based on module
     const api = useMemo(() => {
@@ -192,6 +221,7 @@ const SampleBatchModal = ({
         if (!open || !operation) return;
         form.resetFields();
         setAvailableMethods([]);
+        setMcItemId(null);
 
         // itemCreate operates on samples directly (levels=1): pre-seed selection
         // with the samples the current user is actually allowed to modify.
@@ -232,36 +262,18 @@ const SampleBatchModal = ({
         load();
     }, [open, operation, samples, module, form]);
 
-    // methodCreate: recompute the common methods of the selected items reactively
+    // methodCreate: an item can have multiple methods — fetch the chosen item's
+    // methods (ResourceAdmin/TestItem/method) for the multi-select.
     useEffect(() => {
-        if (!open || operation?.value !== "methodCreate") return;
-        const itemIds = Array.from(
-            new Set(selections.map((path) => path[path.length - 1])),
-        );
-        if (itemIds.length === 0) {
+        if (!open || operation?.value !== "methodCreate" || !mcItemId) {
             setAvailableMethods([]);
             return;
         }
         let cancelled = false;
         (async () => {
             try {
-                const results = await Promise.all(
-                    itemIds.map((id) => methodTestItem({ id })),
-                );
-                let common = [];
-                results.forEach((res, index) => {
-                    const cur = res.data.data || [];
-                    if (index === 0) common = cur;
-                    else
-                        common = common.filter((cm) =>
-                            cur.some(
-                                (m) =>
-                                    (m.method_id || m.id) ===
-                                    (cm.method_id || cm.id),
-                            ),
-                        );
-                });
-                if (!cancelled) setAvailableMethods(common);
+                const res = await methodTestItem({ id: mcItemId });
+                if (!cancelled) setAvailableMethods(res.data.data || []);
             } catch (e) {
                 if (!cancelled) setAvailableMethods([]);
             }
@@ -269,7 +281,7 @@ const SampleBatchModal = ({
         return () => {
             cancelled = true;
         };
-    }, [open, operation, selections]);
+    }, [open, operation, mcItemId]);
 
     const labCodeOf = (s) =>
         `${task?.lab_code || ""}-${s.lab_code?.toString().padStart(4, "0")}`;
@@ -298,9 +310,7 @@ const SampleBatchModal = ({
                     isNotSelfCreated &&
                     isOperationRestricted;
 
-                const isSampleDisabled =
-                    (operation.value === "processCreate" && s.type !== 0) ||
-                    isSelfRestrictDisabled;
+                const isSampleDisabled = isSelfRestrictDisabled;
 
                 if (operation.levels === 1) {
                     return {
@@ -322,13 +332,10 @@ const SampleBatchModal = ({
                         if (operation.levels === 2) {
                             let itemDisabled = isSelfRestrictDisabled;
                             let itemReason = "";
-                            // processCreate: only items that are undistributed AND
-                            // have no processing yet may be configured.
+                            // processCreate: gated only by status — an item can be
+                            // configured while undistributed and not yet processed.
                             if (operation.value === "processCreate") {
-                                if (s.type !== 0) {
-                                    itemDisabled = true;
-                                    itemReason = " (不是非对照样)";
-                                } else if (isItemDistributed(item)) {
+                                if (isItemDistributed(item)) {
                                     itemDisabled = true;
                                     itemReason = " (已下发)";
                                 } else if (item.processing_status !== 0) {
@@ -495,9 +502,15 @@ const SampleBatchModal = ({
 
     const handleSubmit = async () => {
         if (!operation) return;
-        const showTree = operation.levels >= 2;
-        if (showTree && selections.length === 0) {
+        const usesTree =
+            operation.levels >= 2 &&
+            !["itemCreate", "methodCreate"].includes(operation.value);
+        if (usesTree && selections.length === 0) {
             message.warning("请至少选择一项内容");
+            return;
+        }
+        if (operation.value === "methodCreate" && !mcItemId) {
+            message.warning("请选择检测项目");
             return;
         }
 
@@ -563,22 +576,20 @@ const SampleBatchModal = ({
                     ),
                 );
             } else if (operation.value === "methodCreate") {
-                const itemIds = Array.from(
-                    new Set(selections.map((path) => path[path.length - 1])),
-                );
-                const sampleIds = Array.from(
-                    new Set(selections.map((path) => path[0])),
-                );
+                // Single item_id + multiple method_ids; apply only to the
+                // selected samples that actually contain the chosen item.
                 const methodIds = details.method_ids || [];
-                if (itemIds.length && sampleIds.length && methodIds.length) {
-                    itemIds.forEach((itemId) =>
-                        promises.push(
-                            api.methodCreate({
-                                sample_ids: sampleIds,
-                                item_id: itemId,
-                                method_ids: methodIds,
-                            }),
-                        ),
+                const entry = methodCreateItems.find(
+                    (i) => i.itemId === mcItemId,
+                );
+                const sampleIds = entry?.sampleIds || [];
+                if (mcItemId && sampleIds.length && methodIds.length) {
+                    promises.push(
+                        api.methodCreate({
+                            sample_ids: sampleIds,
+                            item_id: mcItemId,
+                            method_ids: methodIds,
+                        }),
                     );
                 }
             } else if (operation.value === "processCreate") {
@@ -716,7 +727,9 @@ const SampleBatchModal = ({
 
     // Only itemCreate skips the item tree (it targets whole samples). Every
     // other levels>=2 op (incl. processCreate) picks items/methods in the tree.
-    const noTreeOps = ["itemCreate"];
+    // itemCreate targets whole samples; methodCreate targets one shared item —
+    // neither uses the item tree. Everything else (delete/distribute/…) does.
+    const noTreeOps = ["itemCreate", "methodCreate"];
     const showTree =
         operation.levels >= 2 && !noTreeOps.includes(operation.value);
 
@@ -770,7 +783,7 @@ const SampleBatchModal = ({
             }
             open={open}
             onCancel={onCancel}
-            width={720}
+            width={840}
             confirmLoading={loading}
             destroyOnHidden
             footer={
@@ -793,10 +806,10 @@ const SampleBatchModal = ({
                 </div>
             }
         >
-            <Spin spinning={loading} tip="正在处理中...">
+            <Spin spinning={loading} description="正在处理中...">
                 <Form form={form} layout="vertical" preserve className="pt-2">
                     {/* Selection area */}
-                    {noTreeOps.includes(operation.value) ? (
+                    {operation.value === "itemCreate" ? (
                         <div className="mb-4 p-3 bg-slate-50 rounded-2xl border border-slate-100">
                             <div className="text-xs font-bold text-slate-500 mb-2">
                                 目标样品
@@ -822,8 +835,7 @@ const SampleBatchModal = ({
                     ) : showTree ? (
                         <div className="mb-4">
                             <div className="text-sm font-black text-slate-700 mb-2">
-                                {operation.value === "methodCreate" ||
-                                operation.value === "processCreate"
+                                {operation.value === "processCreate"
                                     ? "选择目标项目"
                                     : "选择要操作的内容"}
                             </div>
@@ -870,12 +882,59 @@ const SampleBatchModal = ({
 
                     {operation.value === "methodCreate" && (
                         <>
+                            <Form.Item
+                                label={
+                                    <span className="font-black text-slate-700">
+                                        选择检测项目（仅限所选样品中已有的项目）
+                                    </span>
+                                }
+                                required
+                            >
+                                <Select
+                                    placeholder={
+                                        methodCreateItems.length
+                                            ? "请选择检测项目"
+                                            : "所选样品均未配置检测项目"
+                                    }
+                                    className="w-full"
+                                    disabled={methodCreateItems.length === 0}
+                                    value={mcItemId}
+                                    onChange={(val) => {
+                                        setMcItemId(val);
+                                        form.setFieldValue("method_ids", []);
+                                    }}
+                                    showSearch
+                                    optionFilterProp="label"
+                                    options={methodCreateItems.map((i) => ({
+                                        label: `${i.itemName}（${i.sampleIds.length}/${samples.length} 样品含此项目）`,
+                                        value: i.itemId,
+                                    }))}
+                                />
+                            </Form.Item>
+
+                            {mcItemId && missingSamplesForItem.length > 0 && (
+                                <Alert
+                                    type="warning"
+                                    showIcon
+                                    className="mb-4 rounded-xl"
+                                    message={
+                                        <span className="text-xs">
+                                            以下 <b>{missingSamplesForItem.length}</b>{" "}
+                                            个样品不含该项目，添加的方法不会对其生效：
+                                            {missingSamplesForItem
+                                                .map((s) => labCodeOf(s))
+                                                .join("、")}
+                                        </span>
+                                    }
+                                />
+                            )}
+
                             <Divider className="my-3" />
                             <Form.Item
                                 name="method_ids"
                                 label={
                                     <span className="font-black text-slate-700">
-                                        选择要添加的方法（所选项目的公共方法）
+                                        选择要添加的方法（可多选）
                                     </span>
                                 }
                                 rules={[{ required: true, message: "请选择方法" }]}
@@ -883,12 +942,12 @@ const SampleBatchModal = ({
                                 <Select
                                     mode="multiple"
                                     placeholder={
-                                        selections.length
+                                        mcItemId
                                             ? "选择方法"
-                                            : "请先在上方选择目标项目"
+                                            : "请先在上方选择检测项目"
                                     }
                                     className="w-full"
-                                    disabled={selections.length === 0}
+                                    disabled={!mcItemId}
                                     options={availableMethods.map((m) => ({
                                         label: m.method_name || m.name,
                                         value: m.method_id || m.id,

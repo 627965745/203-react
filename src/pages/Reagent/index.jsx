@@ -18,20 +18,20 @@ const ReagentList = () => {
         {
             title: "序号",
             dataIndex: "id",
-            width: "8%",
+            width: 70,
             align: "center",
             render: (id) => <span className="text-gray-400 font-mono">{id}</span>
         },
         {
             title: "试剂名称",
             dataIndex: "name",
-            width: "20%",
+            ellipsis: true,
             render: (text) => <span className="font-bold text-blue-600">{text}</span>
         },
         {
             title: "类别",
             dataIndex: "category",
-            width: "12%",
+            width: 100,
             render: (val) => {
                 const cfg = ReagentCategoryMap[val] || { label: "未知", color: "default" };
                 return <Tag color={cfg.color} className="m-0 border-none">{cfg.label}</Tag>;
@@ -40,26 +40,28 @@ const ReagentList = () => {
         {
             title: "单位",
             dataIndex: "unit",
-            width: "10%",
+            width: 80,
             align: "center"
         },
         {
             title: "报警阈值",
             dataIndex: "alert_threshold",
-            width: "12%",
+            width: 100,
             align: "right",
             render: (val) => <span className="text-orange-500 font-medium">{val}</span>
         },
         {
             title: "创建时间",
             dataIndex: "created_at",
-            width: "15%",
+            width: 140,
+            align: "center",
             render: (text) => <span className="text-xs text-gray-400">{text}</span>
         },
         {
             title: "更新时间",
             dataIndex: "updated_at",
-            width: "15%",
+            width: 140,
+            align: "center",
             render: (text) => <span className="text-xs text-gray-400">{text}</span>
         }
     ];
@@ -120,14 +122,14 @@ const ReagentList = () => {
                 />
             }
             renderExpandedRow={(record) => (
-                <div className="p-4 bg-gray-50 border border-dashed border-gray-200 rounded grid grid-cols-2 gap-8">
+                <div className="p-2 bg-gray-50rounded grid grid-cols-2 gap-8">
                      <div>
                         <div className="text-xs text-gray-400 mb-1 uppercase tracking-wider">安全合规警示贴文件路径</div>
                         <code className="text-xs bg-gray-100 p-1 rounded block">{record.sticker_file || '未配置'}</code>
                      </div>
                      <div>
                         <div className="text-xs text-gray-400 mb-1 uppercase tracking-wider">描述详情</div>
-                        <div className="text-sm whitespace-pre-wrap">{record.description || '暂无详细描述'}</div>
+                        <div className="text-xs whitespace-pre-wrap">{record.description || '暂无详细描述'}</div>
                      </div>
                 </div>
             )}

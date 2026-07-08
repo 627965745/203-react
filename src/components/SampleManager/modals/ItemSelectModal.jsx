@@ -70,7 +70,7 @@ const ItemSelectModal = ({ visible, onClose, onSave }) => {
                         }}
                         expandTrigger="hover"
                         maxTagCount="responsive"
-                        style={{ height: 'auto', minHeight: '34px' }}
+                        style={{ height: 'auto', minHeight: '30px' }}
                         dropdownStyle={{ width: '600px' }}
                         dropdownClassName="large-cascader"
                     />

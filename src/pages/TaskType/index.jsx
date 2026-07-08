@@ -10,28 +10,29 @@ const TaskTypeList = () => {
         {
             title: "序号",
             dataIndex: "id",
-            width: "10%",
+            width: 70,
             align: "center",
         },
         {
             title: "类型编码",
             dataIndex: "code",
-            width: "30%",
+            width: 220,
+            ellipsis: true,
             render: (text) => (
-                <div className="flex items-center gap-2">
-                    <TagOutlined className="text-orange-500" />
-                    <span className="font-mono font-bold text-gray-700">{text}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                    <TagOutlined className="text-orange-500 shrink-0" />
+                    <span className="font-mono font-bold text-gray-700 truncate">{text}</span>
                 </div>
             )
         },
         {
             title: "类型名称",
             dataIndex: "name",
-            width: "40%",
+            ellipsis: true,
             render: (text) => (
-                <div className="flex items-center gap-2">
-                    <DeploymentUnitOutlined className="text-blue-500" />
-                    <span className="font-bold text-blue-600">{text}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                    <DeploymentUnitOutlined className="text-blue-500 shrink-0" />
+                    <span className="font-bold text-blue-600 truncate">{text}</span>
                 </div>
             )
         }

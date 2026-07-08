@@ -7,7 +7,7 @@ import AddEdit from './AddEdit';
 import FieldDrawer from './FieldDrawer';
 import ArrangeModal from './ArrangeModal';
 import { SafetyCertificateOutlined, CodeOutlined, SettingOutlined, LinkOutlined } from "@ant-design/icons";
-import { Button, Tag } from "antd";
+import { Button, Tag, Tooltip } from "antd";
 
 const TestMethodList = () => {
     const [drawerVisible, setDrawerVisible] = useState(false);
@@ -29,7 +29,8 @@ const TestMethodList = () => {
                 key: "arrangeItems",
                 label: "批量关联项目",
                 icon: <LinkOutlined />,
-                primary: true,
+                type: "default",
+                className: "font-bold",
                 onClick: (rows, { clearSelection }) => {
                     setBatchRows(rows);
                     clearBatchRef.current = clearSelection;
@@ -75,35 +76,40 @@ const TestMethodList = () => {
         {
             title: "序号",
             dataIndex: "id",
-            width: "10%",
+            width: 70,
             align: "center",
+            fixed: "left",
         },
         {
             title: "检测方法名称",
             dataIndex: "name",
-            width: "30%",
+            width: 300,
+            ellipsis: false,
             render: (text) => (
-                <div className="flex items-center gap-2">
-                    <SafetyCertificateOutlined className="text-emerald-500" />
-                    <span className="font-bold text-emerald-600">{text}</span>
-                </div>
+                <Tooltip title={text}>
+                    <div className="flex items-center gap-2 min-w-0">
+                        <SafetyCertificateOutlined className="text-emerald-500 shrink-0" />
+                        <span className="font-bold text-emerald-600">{text}</span>
+                    </div>
+                </Tooltip>
             )
         },
         {
             title: "国标代码",
             dataIndex: "code",
-            width: "25%",
+            width: 180,
+            ellipsis: true,
             render: (text) => (
-                <div className="flex items-center gap-2">
-                    <CodeOutlined className="text-gray-400" />
-                    <code className="text-xs bg-gray-100 p-1 rounded px-2 font-mono">{text}</code>
+                <div className="flex items-center gap-2 min-w-0">
+                    <CodeOutlined className="text-gray-400 shrink-0" />
+                    <code className="text-xs bg-gray-100 p-1 rounded px-2 font-mono truncate">{text}</code>
                 </div>
             )
         },
         {
             title: "支持验证项目",
             dataIndex: "items",
-            width: "35%",
+            width: 220,
             render: (items) => (
                 <div className="flex flex-wrap gap-1">
                     {items?.map(m => (
@@ -140,6 +146,7 @@ const TestMethodList = () => {
                 AddEditForm={AddEdit}
                 initialValues={initialValues}
                 modalWidth={500}
+                actionWidth={280}
                 batchActions={batchActions}
                 renderActions={renderActions}
                 onDataLoaded={setMethods}

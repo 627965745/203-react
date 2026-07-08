@@ -21,30 +21,31 @@ const ReportCoverList = () => {
         {
             title: "序号",
             dataIndex: "id",
-            width: "10%",
+            width: 70,
             align: "center",
         },
         {
             title: "模板名称",
             dataIndex: "name",
-            width: "30%",
+            width: 200,
+            ellipsis: true,
             render: (text) => <span className="font-bold text-blue-600">{text}</span>
         },
         {
             title: "模板文件路径",
             dataIndex: "template_file",
-            width: "30%",
+            width: 280,
+            ellipsis: true,
             render: (text) => (
-                <div className="flex items-center gap-2">
-                    <FileWordOutlined className="text-blue-500" />
-                    <code className="text-xs bg-gray-100 p-1 rounded font-mono">{text}</code>
+                <div className="flex items-center gap-2 min-w-0">
+                    <FileWordOutlined className="text-blue-500 shrink-0" />
+                    <code className="text-xs bg-gray-100 p-1 rounded font-mono truncate">{text}</code>
                 </div>
             )
         },
         {
             title: "描述",
             dataIndex: "description",
-            width: "30%",
             ellipsis: true,
             render: (text) => text || <span className="text-gray-300 italic">暂无描述</span>
         }
@@ -85,6 +86,7 @@ const ReportCoverList = () => {
                 AddEditForm={AddEdit}
                 initialValues={initialValues}
                 modalWidth={600}
+                actionWidth={220}
                 renderActions={renderActions}
                 onDataLoaded={setCovers}
             />

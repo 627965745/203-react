@@ -95,7 +95,7 @@ const ComponentModal = ({ visible, onCancel, record, onSuccess }) => {
         {
             title: "成分名称",
             dataIndex: "component",
-            editable: true,
+            editable: false,
         },
         {
             title: "标准值",

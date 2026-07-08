@@ -1,21 +1,6 @@
 import { useState, useMemo } from "react";
-import {
-    Tag,
-    Switch,
-    message,
-    Button,
-    Space,
-    Modal,
-    Form,
-    Input,
-    Popconfirm,
-} from "antd";
-import {
-    PlusOutlined,
-    EditOutlined,
-    DeleteOutlined,
-    OrderedListOutlined,
-} from "@ant-design/icons";
+import { Tag, Switch, message, Space, Modal, Form } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
 import CrudTable from "../../components/CrudTable";
 import {
     readProcessingMethod,
@@ -27,6 +12,7 @@ import {
     deleteProcessingOption,
 } from "../../api/processingMethod";
 import AddEdit from "./AddEdit";
+import OptionModal from "./OptionModal";
 
 const ProcessingMethodList = () => {
     const [refreshKey, setRefreshKey] = useState(0);
@@ -113,7 +99,7 @@ const ProcessingMethodList = () => {
         {
             title: "序号",
             dataIndex: "id",
-            width: "10%",
+            width: 70,
             align: "center",
             render: (id) => (
                 <span className="text-gray-400 font-mono">{id}</span>
@@ -122,7 +108,8 @@ const ProcessingMethodList = () => {
         {
             title: "加工方法名称",
             dataIndex: "name",
-            width: "25%",
+            width: 200,
+            ellipsis: true,
             render: (text) => (
                 <span className="font-bold text-indigo-600 text-[15px]">
                     {text}
@@ -132,7 +119,6 @@ const ProcessingMethodList = () => {
         {
             title: "加工选项（点击选项可编辑，点击x删除）",
             key: "optionsList",
-            width: "45%",
             render: (_, record) => (
                 <Space size={[4, 8]} wrap>
                     {record.options?.map((opt) => (
@@ -179,7 +165,7 @@ const ProcessingMethodList = () => {
         {
             title: "启用状态",
             dataIndex: "enabled",
-            width: "20%",
+            width: 100,
             align: "center",
             render: (val, record) => (
                 <Switch
@@ -207,9 +193,9 @@ const ProcessingMethodList = () => {
                 modalWidth={500}
             />
 
-            <Modal
-                title={optionModal.option ? "更新加工选项" : "添加加工选项"}
-                open={optionModal.visible}
+            <OptionModal
+                optionModal={optionModal}
+                form={form}
                 onCancel={() =>
                     setOptionModal({
                         visible: false,
@@ -217,64 +203,8 @@ const ProcessingMethodList = () => {
                         option: null,
                     })
                 }
-                cancelText="取消"
-                okText="确认"
-                onOk={() => form.submit()}
-                width={400}
-                destroyOnHidden
-            >
-                <Form
-                    form={form}
-                    layout="vertical"
-                    onFinish={handleOptionSubmit}
-                    className="pt-4"
-                >
-                    <Form.Item label="所属方法" className="mb-4">
-                        <Tag color="cyan" className="m-0">
-                            {optionModal.method?.name}
-                        </Tag>
-                    </Form.Item>
-                    {optionModal.method?.options &&
-                        optionModal.method.options.length > 0 && (
-                            <Form.Item label="已有选项" className="mb-4">
-                                <Space size={[4, 8]} wrap>
-                                    {optionModal.method.options.map((opt) => (
-                                        <Tag
-                                            key={opt.id}
-                                            color={
-                                                opt.enabled === 1
-                                                    ? "blue"
-                                                    : "default"
-                                            }
-                                        >
-                                            {opt.value}
-                                        </Tag>
-                                    ))}
-                                </Space>
-                            </Form.Item>
-                        )}
-                    <Form.Item
-                        label="选项值"
-                        name="value"
-                        rules={[{ required: true, message: "请输入选项值" }]}
-                    >
-                        <Input
-                            placeholder="例如: 平口, 螺纹..."
-                            maxLength={255}
-                        />
-                    </Form.Item>
-                    <Form.Item
-                        label="状态"
-                        name="enabled"
-                        valuePropName="checked"
-                    >
-                        <Switch
-                            checkedChildren="启用"
-                            unCheckedChildren="禁用"
-                        />
-                    </Form.Item>
-                </Form>
-            </Modal>
+                onSubmit={handleOptionSubmit}
+            />
         </>
     );
 };

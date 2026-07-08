@@ -14,7 +14,7 @@ const DepartmentList = () => {
             title: "序号",
             dataIndex: "id",
             key: "id",
-            width: "8%",
+            width: 70,
             align: "center",
             render: (text) => <span className="text-gray-400 font-mono text-xs">{text}</span>
         },
@@ -22,13 +22,14 @@ const DepartmentList = () => {
             title: "部门名称",
             dataIndex: "name",
             key: "name",
+            ellipsis: true,
             render: (text) => <span className="font-bold text-blue-600">{text}</span>
         },
         {
             title: "创建时间",
             dataIndex: "created_at",
             key: "created_at",
-            width: "18%",
+            width: 160,
             align: "center",
             render: (text) => <span className="text-gray-400 text-xs">{text || '-'}</span>
         },
@@ -36,7 +37,7 @@ const DepartmentList = () => {
             title: "更新时间",
             dataIndex: "updated_at",
             key: "updated_at",
-            width: "18%",
+            width: 160,
             align: "center",
             render: (text) => <span className="text-gray-400 text-xs">{text || '-'}</span>
         }

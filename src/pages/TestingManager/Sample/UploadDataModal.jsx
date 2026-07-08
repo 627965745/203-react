@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Modal, Upload, message, Typography, Space } from "antd";
-import { InboxOutlined, FileExcelOutlined } from "@ant-design/icons";
+import { Modal, Upload, message, Typography, Space, Button } from "antd";
+import { InboxOutlined, FileExcelOutlined, DeleteOutlined } from "@ant-design/icons";
 import { uploadTestingSample } from "../../../api/testing";
 
 const { Dragger } = Upload;
@@ -17,7 +17,8 @@ const UploadDataModal = ({ open, onCancel, onSuccess }) => {
         }
 
         const formData = new FormData();
-        formData.append("file", fileList[0]);
+        const rawFile = fileList[0]?.originFileObj || fileList[0];
+        formData.append("file", rawFile);
 
         setUploading(true);
         try {
@@ -73,9 +74,6 @@ const UploadDataModal = ({ open, onCancel, onSuccess }) => {
                         <div className="text-lg font-black text-slate-800">
                             上传检测数据
                         </div>
-                        <div className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">
-                            Upload Testing Data
-                        </div>
                     </div>
                 </div>
             }
@@ -120,6 +118,12 @@ const UploadDataModal = ({ open, onCancel, onSuccess }) => {
                                 {(fileList[0].size / 1024).toFixed(2)} KB
                             </Text>
                         </div>
+                        <Button
+                            type="text"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={() => setFileList([])}
+                        />
                     </div>
                 )}
             </div>

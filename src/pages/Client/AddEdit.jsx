@@ -38,42 +38,44 @@ const AddEdit = ({ record, onChange }) => {
 
     return (
         <Space orientation="vertical" className="w-full">
-            <div>
-                <div className="mb-2">客户名称 <span className="text-red-500">*</span></div>
-                <Input
-                    placeholder="请输入客户名称"
-                    value={record.name || ""}
-                    onChange={(e) => {
-                        onChange({ ...record, name: e.target.value });
-                        if (errors.name) setErrors({...errors, name: null});
-                    }}
-                    status={errors.name ? "error" : ""}
-                    maxLength={255}
-                />
-                {errors.name && (
-                    <div className="text-red-500 text-sm mt-1">
-                        {errors.name}
-                    </div>
-                )}
-            </div>
-            
-            <div>
-                <div className="mb-2">统一社会信用代码 <span className="text-red-500">*</span></div>
-                <Input
-                    placeholder="请输入18位统一社会信用代码"
-                    value={record.tax_code || ""}
-                    onChange={(e) => {
-                        onChange({ ...record, tax_code: e.target.value });
-                        if (errors.tax_code) setErrors({...errors, tax_code: null});
-                    }}
-                    status={errors.tax_code ? "error" : ""}
-                    maxLength={18}
-                />
-                {errors.tax_code && (
-                    <div className="text-red-500 text-sm mt-1">
-                        {errors.tax_code}
-                    </div>
-                )}
+            <div className="flex gap-4">
+                <div className="flex-1">
+                    <div className="mb-2">客户名称 <span className="text-red-500">*</span></div>
+                    <Input
+                        placeholder="请输入客户名称"
+                        value={record.name || ""}
+                        onChange={(e) => {
+                            onChange({ ...record, name: e.target.value });
+                            if (errors.name) setErrors({...errors, name: null});
+                        }}
+                        status={errors.name ? "error" : ""}
+                        maxLength={255}
+                    />
+                    {errors.name && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.name}
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex-1">
+                    <div className="mb-2">统一社会信用代码 <span className="text-red-500">*</span></div>
+                    <Input
+                        placeholder="请输入18位统一社会信用代码"
+                        value={record.tax_code || ""}
+                        onChange={(e) => {
+                            onChange({ ...record, tax_code: e.target.value });
+                            if (errors.tax_code) setErrors({...errors, tax_code: null});
+                        }}
+                        status={errors.tax_code ? "error" : ""}
+                        maxLength={18}
+                    />
+                    {errors.tax_code && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.tax_code}
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="flex gap-4">

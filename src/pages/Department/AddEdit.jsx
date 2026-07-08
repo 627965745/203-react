@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { Input, Space, TreeSelect } from "antd";
-import { readDepartment } from "../../api/department";
 
-const AddEdit = ({ record, onChange }) => {
+const AddEdit = ({ record, onChange, tableData }) => {
     const [errors, setErrors] = useState({});
     const [treeData, setTreeData] = useState([]);
 
@@ -22,29 +21,21 @@ const AddEdit = ({ record, onChange }) => {
     }, [record, onChange]);
 
     useEffect(() => {
-        const fetchTreeData = async () => {
-            try {
-                const response = await readDepartment();
-                if (response.data.status === 0) {
-                    // Preprocess treeData for TreeSelect if needed
-                    // Usually Ant TreeSelect expects { value, title, children }
-                    // Our response uses { id, name, children }
-                    const formatTree = (nodes) =>
-                        (nodes || []).map((node) => ({
-                            value: node.id,
-                            title: node.name,
-                            children: formatTree(node.children),
-                            // Avoid selecting itself as its own parent for editing
-                            disabled: node.id === record?.id,
-                        }));
-                    setTreeData(formatTree(response.data.data));
-                }
-            } catch (error) {
-                console.error("Error fetching departments for select:", error);
-            }
-        };
-        fetchTreeData();
-    }, [record?.id]);
+        if (tableData) {
+            // Preprocess treeData for TreeSelect
+            // Ant TreeSelect expects { value, title, children }
+            // Our dataset uses { id, name, children }
+            const formatTree = (nodes) =>
+                (nodes || []).map((node) => ({
+                    value: node.id,
+                    title: node.name,
+                    children: formatTree(node.children),
+                    // Avoid selecting itself as its own parent for editing
+                    disabled: node.id === record?.id,
+                }));
+            setTreeData(formatTree(tableData));
+        }
+    }, [tableData, record?.id]);
 
     return (
         <Space orientation="vertical" className="w-full">

@@ -17,7 +17,8 @@ const UploadModal = ({ visible, onCancel, onSuccess }) => {
         }
 
         const formData = new FormData();
-        formData.append("file", fileList[0]);
+        const rawFile = fileList[0]?.originFileObj || fileList[0];
+        formData.append("file", rawFile);
 
         setUploading(true);
         try {

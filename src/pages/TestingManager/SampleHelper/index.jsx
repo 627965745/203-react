@@ -311,7 +311,7 @@ const SampleHelper = () => {
     } : null;
 
     return (
-      <div className="bg-gray-50/30 p-4 rounded-lg border border-gray-100 mx-4 my-2">
+      <div className="mx-4 my-2">
         <h4 className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">辅助检测项明细</h4>
         <Table
           rowKey={(record) => `${sample.id}-${record.item_id}-${record.method_id}`}
@@ -320,7 +320,7 @@ const SampleHelper = () => {
           pagination={false}
           size="small"
           rowSelection={innerRowSelection}
-          className="bg-white rounded-md shadow-sm overflow-hidden"
+          className="bg-white rounded-md overflow-hidden"
         />
       </div>
     );
@@ -375,10 +375,10 @@ const SampleHelper = () => {
   } : null;
 
   return (
-    <div className="p-6">
-      <Card title="辅助检测管理" className="shadow-md rounded-xl overflow-hidden">
+    <div className="pl-6">
+      <Card title="辅助检测管理" className="overflow-hidden">
         {/* Task Filter Section */}
-        <div className="bg-gray-50/50 p-6 border-b border-gray-100">
+        <div className="bg-gray-50/50 p-2 border-b border-gray-100">
           <div className="flex items-center">
             <div className="flex flex-col mr-8">
               <span className="text-sm font-bold text-gray-800 leading-none">筛选任务</span>
@@ -389,7 +389,7 @@ const SampleHelper = () => {
               {/* All Tasks Button */}
               <button
                 onClick={handleAllTasks}
-                className={`h-10 px-6 rounded-xl font-bold text-sm transition-all duration-200 border-2 ${
+                className={`h-10 px-4 rounded-xl font-bold text-sm transition-all duration-200 border-2 ${
                   selectedTaskIds.length === 0
                   ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100 scale-105'
                   : 'bg-white border-gray-200 text-gray-500 hover:border-blue-400 hover:text-blue-500'
@@ -432,8 +432,8 @@ const SampleHelper = () => {
           </div>
         </div>
 
-        <div className="p-6">
-          <div className="flex justify-between mb-6">
+        <div className="pt-2">
+          <div className="flex justify-between mb-2">
           <Space>
             <Input
               placeholder="输入关键词查询"
@@ -441,7 +441,7 @@ const SampleHelper = () => {
               value={queryParams.query}
               onChange={(e) => setQueryParams({ ...queryParams, query: e.target.value, page: 1 })}
               onPressEnter={fetchData}
-              className="w-64"
+              className="w-72"
             />
             <Button type="primary" onClick={fetchData}>查询</Button>
           </Space>

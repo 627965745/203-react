@@ -33,24 +33,24 @@ const ReportTableList = () => {
         {
             title: "序号",
             dataIndex: "id",
-            width: "15%",
+            width: 70,
             align: "center",
         },
         {
             title: "表名称",
             dataIndex: "name",
-            width: "35%",
+            width: 220,
+            ellipsis: true,
             render: (text) => (
-                <div className="flex items-center gap-2">
-                    <TableOutlined className="text-blue-500" />
-                    <span className="font-bold">{text}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                    <TableOutlined className="text-blue-500 shrink-0" />
+                    <span className="font-bold truncate">{text}</span>
                 </div>
             )
         },
         {
             title: "描述说明",
             dataIndex: "description",
-            width: "50%",
             ellipsis: true,
             render: (text) => text || <span className="text-gray-300 italic">暂无描述</span>
         }
@@ -79,6 +79,7 @@ const ReportTableList = () => {
                 AddEditForm={AddEdit}
                 initialValues={initialValues}
                 modalWidth={600}
+                actionWidth={220}
                 renderActions={renderActions}
                 onDataLoaded={setTables}
             />

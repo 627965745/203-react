@@ -164,7 +164,7 @@ const TaskList = () => {
             width: 100,
             render: (val) => {
                 const item = DeliveredByMap[val];
-                return <span className="text-sm text-slate-600">{item?.label || val}</span>;
+                return <span className="text-xs text-slate-600">{item?.label || val}</span>;
             }
         },
         {
@@ -241,9 +241,10 @@ const TaskList = () => {
             AddEditForm={AddEdit}
             initialValues={initialValues}
             modalWidth={800}
-            scroll={{ x: 1800 }}
+            actionWidth={140}
+            scroll={{ x: 1200 }}
             actionExtra={
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 ml-2">
                     <Button 
                         icon={<DownloadOutlined />} 
                         onClick={() => setDownloadVisible(true)}

@@ -8,32 +8,35 @@ const DeviceCategoryList = () => {
         {
             title: "序号",
             dataIndex: "id",
-            width: "10%",
+            width: 70,
             align: "center",
             render: (id) => <span className="text-gray-400 font-mono">{id}</span>
         },
         {
             title: "分类名称",
             dataIndex: "name",
-            width: "25%",
+            ellipsis: true,
             render: (text) => <span className="font-bold text-blue-600">{text}</span>
         },
         {
             title: "分类编码",
             dataIndex: "code",
-            width: "10%",
+            width: 140,
+            ellipsis: true,
             render: (text) => <span className="text-gray-500">{text}</span>
         },
         {
             title: "创建时间",
             dataIndex: "created_at",
-            width: "20%",
+            width: 160,
+            align: "center",
             render: (text) => <span className="text-xs text-gray-400">{text}</span>
         },
         {
             title: "更新时间",
             dataIndex: "updated_at",
-            width: "20%",
+            width: 160,
+            align: "center",
             render: (text) => <span className="text-xs text-gray-400">{text}</span>
         }
     ];

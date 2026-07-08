@@ -9,17 +9,17 @@ const TestCategoryList = () => {
         {
             title: "序号",
             dataIndex: "id",
-            width: "20%",
+            width: 70,
             align: "center",
         },
         {
             title: "检测类别名称",
             dataIndex: "name",
-            width: "60%",
+            ellipsis: true,
             render: (text) => (
-                <div className="flex items-center gap-2">
-                    <AppstoreOutlined className="text-teal-500" />
-                    <span className="font-bold text-teal-600">{text}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                    <AppstoreOutlined className="text-teal-500 shrink-0" />
+                    <span className="font-bold text-teal-600 truncate">{text}</span>
                 </div>
             )
         }

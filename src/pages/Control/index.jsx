@@ -44,7 +44,8 @@ const ControlPage = () => {
                 key: "arrangeRoles",
                 label: "批量分配角色",
                 icon: <LinkOutlined />,
-                primary: true,
+                type: "default",
+                className: "font-bold",
                 onClick: (rows, { clearSelection }) => {
                     setBatchRows(rows);
                     clearBatchRef.current = clearSelection;
@@ -88,11 +89,11 @@ const ControlPage = () => {
             title: '名称',
             dataIndex: 'name',
             key: 'name',
-            width: '25%',
+            ellipsis: true,
             render: (text, record) => (
-                <Space>
+                <Space className="min-w-0">
                     {renderIcon(record.icon)}
-                    <span className="font-bold text-gray-700">{text}</span>
+                    <span className="font-bold text-gray-700 truncate">{text}</span>
                 </Space>
             )
         },
@@ -100,7 +101,8 @@ const ControlPage = () => {
             title: '路径',
             dataIndex: 'path',
             key: 'path',
-            width: '10%',
+            width: 160,
+            ellipsis: true,
             render: (text) => (
                 <Tag color="cyan" icon={<LinkOutlined />} className="font-mono">{text}</Tag>
             )
@@ -109,7 +111,7 @@ const ControlPage = () => {
             title: '关联角色',
             dataIndex: 'roles',
             key: 'roles',
-            width: '20%',
+            width: 260,
             render: (roles) => (
                 <div className="flex flex-wrap gap-1">
                     {roles?.map(r => (
@@ -123,7 +125,7 @@ const ControlPage = () => {
             title: '排序',
             dataIndex: 'sort',
             key: 'sort',
-            width: '10%',
+            width: 80,
             align: 'center',
             render: (val) => <Tag className="bg-gray-50 text-gray-500 border-none px-2">{val}</Tag>
         },
@@ -131,7 +133,7 @@ const ControlPage = () => {
             title: '状态',
             dataIndex: 'enabled',
             key: 'enabled',
-            width: '10%',
+            width: 80,
             align: 'center',
             render: (val, record) => (
                 <Switch 
@@ -184,6 +186,7 @@ const ControlPage = () => {
                     return newPayload;
                 }}
                 modalWidth={500}
+                actionWidth={200}
                 tableProps={tableProps}
                 batchActions={batchActions}
                 renderActions={(record) => (

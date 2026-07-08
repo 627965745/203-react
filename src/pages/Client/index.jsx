@@ -8,12 +8,12 @@ const ClientList = () => {
         {
             title: "客户名称",
             dataIndex: "name",
-            width: "20%",
+            width: 220,
             render: (text, record) => (
-                <div className="flex flex-col">
-                    <div className="font-bold text-slate-700">{text}</div>
+                <div className="flex flex-col min-w-0">
+                    <div className="font-bold text-slate-700 truncate" title={text}>{text}</div>
                     {record.address && (
-                        <div className="text-[11px] text-gray-400 mt-0.5">{record.address}</div>
+                        <div className="text-[11px] text-gray-400 truncate" title={record.address}>{record.address}</div>
                     )}
                 </div>
             )
@@ -21,19 +21,20 @@ const ClientList = () => {
         {
             title: "信用代码",
             dataIndex: "tax_code",
-            width: "15%",
+            width: 160,
+            ellipsis: true,
             render: text => text || '-',
         },
         {
             title: "联系人",
             dataIndex: "contact",
-            width: "10%",
+            width: 90,
             render: text => text || '-',
         },
         {
             title: "联系方式",
             dataIndex: "mobile",
-            width: "15%",
+            width: 170,
             render: (_, record) => (
                 <div className="flex flex-col text-sm">
                    {record.mobile ? <div>手机: {record.mobile}</div> : null}
@@ -45,13 +46,14 @@ const ClientList = () => {
         {
             title: "邮箱",
             dataIndex: "email",
-            width: "15%",
+            ellipsis: true,
             render: text => text || '-',
         },
         {
             title: "更新时间",
             dataIndex: "updated_at",
-            width: "15%",
+            width: 150,
+            align: "center",
             render: text => text || '-',
         }
     ];

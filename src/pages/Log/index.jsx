@@ -19,7 +19,7 @@ const LogList = () => {
         const fetchCombos = async () => {
             try {
                 const depRes = await comboDepartment({});
-                if (depdepRes.data.status === 0) {
+                if (depRes.data.status === 0) {
                     setDepartments(
                         (depRes.data.data || []).map((d) => ({
                             label: d.name,
@@ -28,7 +28,7 @@ const LogList = () => {
                     );
                 }
                 const usrRes = await comboUser({});
-                if (usrusrRes.data.status === 0) {
+                if (usrRes.data.status === 0) {
                     setUsers(
                         (usrRes.data.data || []).map((u) => ({
                             label: u.name,
@@ -47,12 +47,12 @@ const LogList = () => {
         {
             title: "序号",
             dataIndex: "id",
-            width: "5%",
+            width: 70,
             align: "center",
         },
         {
             title: "用户",
-            width: "12%",
+            width: 130,
             render: (_, record) => (
                 <div className="flex flex-col">
                     <span className="font-medium text-blue-600">
@@ -67,13 +67,13 @@ const LogList = () => {
         {
             title: "请求路由",
             dataIndex: "route",
-            width: "25%",
+            ellipsis: true,
             render: (val) => <span className="font-mono text-xs">{val}</span>,
         },
         {
             title: "状态",
             dataIndex: "response_status",
-            width: "8%",
+            width: 80,
             align: "center",
             render: (val) => {
                 let color = "default";
@@ -85,7 +85,7 @@ const LogList = () => {
         {
             title: "请求参数",
             dataIndex: "request_data",
-            width: "10%",
+            width: 100,
             align: "center",
             render: (val) => {
                 if (!val || val === "{}")
@@ -124,7 +124,7 @@ const LogList = () => {
         {
             title: "操作时间",
             dataIndex: "created_at",
-            width: "15%",
+            width: 160,
         },
     ];
 

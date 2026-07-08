@@ -70,11 +70,12 @@ const CrudTable = ({
     modalWidth = 650,
     renderExpandedRow,
     renderActions, // New prop for custom action column content
+    actionWidth = 160, // Width of the action column; widen when renderActions adds extra buttons
     filterValues, // Current filter state
     filterConfig, // Metadata for filters { category: { label: '分类', options: [...] } }
     onClearFilter, // Callback for clearing a specific filter
     onClearAll, // Callback for clearing all filters
-    scroll, // Table scroll prop
+    scroll = { x: 1000 }, // Table scroll prop
     expandAll = false, // Whether to expand all rows by default
     refreshKey, // Optional prop to trigger a refresh from parent
     onDataLoaded, // Callback when data is successfully loaded
@@ -92,7 +93,7 @@ const CrudTable = ({
     const [loading, setLoading] = useState(false);
     const [pagination, setPagination] = useState({
         current: 1,
-        pageSize: 10,
+        pageSize: 20,
         total: 0,
     });
     const [filterValue, setFilterValue] = useState("");
@@ -441,7 +442,7 @@ const CrudTable = ({
         batchActions.map((a) => (
             <Button
                 key={a.key}
-                type="link"
+                type={a.type || "link"}
                 icon={a.icon}
                 danger={a.danger}
                 disabled={
@@ -450,7 +451,7 @@ const CrudTable = ({
                         : a.disabled
                 }
                 onClick={() => handleBatchClick(a)}
-                className="font-bold px-0"
+                className={a.className !== undefined ? a.className : "font-bold px-0"}
             >
                 {a.label}
             </Button>
@@ -461,7 +462,7 @@ const CrudTable = ({
         title: "操作",
         key: "action",
         fixed: "right",
-        width: 160, // Reduced width since only one button is shown in this case, but good for general use
+        width: actionWidth,
         align: "center",
         render: (_, record) => {
             const editable =
@@ -547,6 +548,7 @@ const CrudTable = ({
         hideAction,
         hideEdit,
         hideDelete,
+        actionWidth,
         useShowMore,
         expandedRowKeys,
     ]);
@@ -559,9 +561,9 @@ const CrudTable = ({
 
     return (
         <div
-            className={`flex flex-col bg-white pl-6 ${className || "min-h-[calc(100vh-112px)]"}`}
+            className={`flex flex-col bg-white pl-4 ${className || "min-h-[calc(100vh-112px)]"}`}
         >
-            <div className="mb-8 flex justify-between items-center relative mt-2">
+            <div className="mb-3 flex justify-between items-center relative mt-1">
                 <h1 className="text-xl font-black text-slate-800 m-0 tracking-tight">
                     {title}
                 </h1>
@@ -620,23 +622,7 @@ const CrudTable = ({
                 {headerExtra}
             </div>
 
-            <div className="flex justify-between items-center mb-4 min-h-[40px]">
-                <Space wrap>
-                    {!hideAdd && (
-                        <Button
-                            type="primary"
-                            icon={<PlusOutlined />}
-                            onClick={handleAdd}
-                        >
-                            新增{entityName}
-                        </Button>
-                    )}
-                    {actionExtra}
-                    {batchControls}
-                </Space>
-
-                <div className="flex-1" />
-
+            <div className="flex justify-between items-center mb-2 min-h-[32px]">
                 {!hideSearch && (
                     <Input.Search
                         placeholder={searchPlaceholder}
@@ -650,6 +636,22 @@ const CrudTable = ({
                         enterButton="搜索"
                     />
                 )}
+
+                <div className="flex-1" />
+
+                <Space wrap>
+                    {actionExtra}
+                    {batchControls}
+                    {!hideAdd && (
+                        <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            onClick={handleAdd}
+                        >
+                            新增{entityName}
+                        </Button>
+                    )}
+                </Space>
             </div>
 
             <Table
@@ -683,8 +685,8 @@ const CrudTable = ({
                 loading={loading}
                 rowKey="id"
                 bordered
-                size="middle"
-                className="mt-4"
+                size="small"
+                className="mt-2"
                 scroll={scroll}
                 expandable={
                     renderExpandedRow
@@ -723,6 +725,7 @@ const CrudTable = ({
                             }} // Dynamic prop name
                             record={currentRecord} // Fallback consistent name
                             onChange={handleCreateChange}
+                            tableData={data}
                         />
                     )}
                 </div>
@@ -747,6 +750,7 @@ const CrudTable = ({
                             }}
                             record={editingRecord}
                             onChange={handleEditChange}
+                            tableData={data}
                         />
                     )}
                 </div>

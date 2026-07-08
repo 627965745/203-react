@@ -1,10 +1,24 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
-import { Button, Layout as AntLayout, Menu, theme, Space, message, Dropdown } from 'antd';
-import { UserOutlined, LockOutlined, LogoutOutlined } from '@ant-design/icons';
-import * as AntdIcons from '@ant-design/icons';
+import {
+    Button,
+    Layout as AntLayout,
+    Menu,
+    theme,
+    Space,
+    message,
+    Dropdown,
+    ConfigProvider,
+} from "antd";
+import { UserOutlined, LockOutlined, LogoutOutlined } from "@ant-design/icons";
+import * as AntdIcons from "@ant-design/icons";
 import { logout } from "../api/user";
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from "../contexts/AuthContext";
+import zhCN from "antd/locale/zh_CN";
+import dayjs from "dayjs";
+import "dayjs/locale/zh-cn";
+
+dayjs.locale("zh-cn");
 
 const { Header, Content } = AntLayout;
 
@@ -12,7 +26,7 @@ const AdminAppLayout = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { user, checkAuthStatus } = useAuth();
-    
+
     const {
         token: { colorBgContainer, borderRadiusLG },
     } = theme.useToken();
@@ -21,20 +35,25 @@ const AdminAppLayout = () => {
         return (
             <div className="min-h-screen w-screen flex items-center justify-center bg-[#f0f2f5] bg-no-repeat bg-position-[center_110px] bg-size-[100%] bg-[url('https://gw.alipayobjects.com/zos/rmsportal/TVYTbAXWNIpQyUPTRXyQ.svg')]">
                 <div className="w-[90%] md:w-[500px] p-6 md:p-9 bg-white rounded-lg shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
-                    <Outlet />
+                    <ConfigProvider
+                        locale={zhCN}
+                        theme={{ algorithm: theme.compactAlgorithm }}
+                    >
+                        <Outlet />
+                    </ConfigProvider>
                 </div>
             </div>
         );
     }
-    
+
     const [selectedKey, setSelectedKey] = useState(() => {
-        const pathParts = location.pathname.split('/');
-        return pathParts[1] || '';
+        const pathParts = location.pathname.split("/");
+        return pathParts[1] || "";
     });
 
     useEffect(() => {
-        const pathParts = location.pathname.split('/');
-        const currentKey = pathParts[1] || '';
+        const pathParts = location.pathname.split("/");
+        const currentKey = pathParts[1] || "";
         setSelectedKey(currentKey);
     }, [location.pathname]);
 
@@ -55,48 +74,19 @@ const AdminAppLayout = () => {
         }
     };
 
-    const handleMenuClick = ({ key }) => {
-        switch (key) {
-            case 'logout':
-                handleLogout();
-                break;
-            case 'changePassword':
-                navigate("/reset-password"); // Assume we will handle this in future or just provide route
-                break;
-            default:
-                break;
-        }
-    };
 
-    const userMenu = {
-        items: [
-            {
-                key: 'changePassword',
-                label: '修改密码',
-                icon: <LockOutlined />
-            },
-            {
-                type: 'divider'
-            },
-            {
-                key: 'logout',
-                label: '退出登录',
-                icon: <LogoutOutlined />,
-                danger: true
-            }
-        ],
-        onClick: handleMenuClick
-    };
 
     const sidebarComponent = useMemo(() => {
         const buildMenuItems = (menus) => {
             if (!menus || !Array.isArray(menus)) return [];
-            return menus.map(item => {
+            return menus.map((item) => {
                 const isParent = !item.path;
                 let key = item.id ? item.id.toString() : item.name;
-                
+
                 if (!isParent) {
-                    key = item.path.startsWith('/') ? item.path.slice(1) : item.path;
+                    key = item.path.startsWith("/")
+                        ? item.path.slice(1)
+                        : item.path;
                 }
 
                 let IconComponent = null;
@@ -107,8 +97,12 @@ const AdminAppLayout = () => {
 
                 const result = {
                     key,
-                    label: isParent ? item.name : <Link to={item.path}>{item.name}</Link>,
-                    icon: IconComponent
+                    label: isParent ? (
+                        item.name
+                    ) : (
+                        <Link to={item.path}>{item.name}</Link>
+                    ),
+                    icon: IconComponent,
                 };
 
                 if (item.children && item.children.length > 0) {
@@ -135,16 +129,16 @@ const AdminAppLayout = () => {
     }, [selectedKey, navigate, user?.menu]);
 
     return (
-        <AntLayout className="min-h-screen">
-            <Header className="flex items-center justify-between px-6 sticky top-0" style={{ zIndex: 1000 }}>
+        <AntLayout className="min-h-screen" >
+            <Header className="flex items-center justify-between sticky top-0" style={{ zIndex: 1000, background: "#DAEBFD", paddingLeft: 36, paddingRight: 24 }}>
                 <div className="flex items-center flex-1">
-                    <div className="demo-logo text-white font-bold text-lg mr-8">
-                        LIMS Admin
+                    <div className="demo-logo text-black font-bold text-lg mr-8">
+                        富立盈鑫实验室管理系统
                     </div>
                     <Menu
-                        theme="dark"
+                        style={{ background: "#DAEBFD" }}
                         mode="horizontal"
-                        selectedKeys={selectedKey === '' ? ['home'] : []}
+                        selectedKeys={selectedKey === '' ? ['home'] : (selectedKey === 'fileshare' ? ['fileshare'] : [])}
                         className="flex-1 min-w-0"
                         items={[
                             {
@@ -155,37 +149,63 @@ const AdminAppLayout = () => {
                                 },
                                 label: "首页",
                             },
+                            {
+                                key: "fileshare",
+                                onClick: () => {
+                                    setSelectedKey('fileshare');
+                                    navigate('/fileshare');
+                                },
+                                label: "文件库",
+                            },
                         ]}
                     />
                 </div>
-                <Space>
-                    <Dropdown menu={userMenu} placement="bottomRight">
-                        <Button 
-                            type="text" 
-                            icon={<UserOutlined className="text-white" />}
-                            className="flex items-center text-white"
-                        >
-                            <span className="ml-1 text-white">
-                                {user?.nickname || user?.name || '管理员'}
+                <div className="flex items-center gap-4">
+                    <div className="flex flex-col items-end leading-none">
+                        <span className="text-sm font-bold text-slate-800 leading-tight">
+                            {user?.name || "管理员"}
+                        </span>
+                        {user?.nickname && (
+                            <span className="text-xs text-slate-500 mt-1">
+                                {user?.nickname}
                             </span>
+                        )}
+                    </div>
+                    <Space size="small">
+                        <Button
+                            type="text"
+                            icon={<LockOutlined />}
+                            onClick={() => navigate("/reset-password")}
+                            className="font-bold text-slate-600 hover:text-blue-600"
+                        >
+                            修改密码
                         </Button>
-                    </Dropdown>
-                </Space>
+                        <Button
+                            type="text"
+                            danger
+                            icon={<LogoutOutlined />}
+                            onClick={handleLogout}
+                            className="font-bold"
+                        >
+                            退出登录
+                        </Button>
+                    </Space>
+                </div>
             </Header>
             <AntLayout className="min-h-[calc(100vh-64px)]">
-                <Content
+                    <Content
                     className="p-6 m-0 min-h-full"
-                    style={{
-                        background: colorBgContainer,
-                        borderRadius: borderRadiusLG,
-                    }}
-                >
+                        style={{
+                            background: colorBgContainer,
+                            borderRadius: borderRadiusLG,
+                        }}
+                    >
                     <div className="flex min-h-full">
                         {sidebarComponent}
                         <div className="flex-1 min-w-0">
-                            <Outlet />
+                                <Outlet />
                         </div>
-                    </div>
+                </div>
                 </Content>
             </AntLayout>
         </AntLayout>

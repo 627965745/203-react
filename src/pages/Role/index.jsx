@@ -33,7 +33,8 @@ const RoleList = () => {
                 key: "arrangeUsers",
                 label: "批量分配用户",
                 icon: <LinkOutlined />,
-                primary: true,
+                type: "default",
+                className: "font-bold",
                 onClick: (rows, { clearSelection }) => {
                     setBatchRows(rows);
                     clearBatchRef.current = clearSelection;
@@ -53,24 +54,26 @@ const RoleList = () => {
         {
             title: "序号",
             dataIndex: "id",
-            width: "10%",
+            width: 50,
             align: "center",
+            fixed: "left",
         },
         {
             title: "角色名称",
             dataIndex: "name",
-            width: "20%",
+            width: 160,
+            ellipsis: true,
             render: (text) => (
-                <div className="flex items-center gap-2">
-                    <UserOutlined className="text-indigo-500" />
-                    <span className="font-bold text-indigo-600">{text}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                    <UserOutlined className="text-indigo-500 shrink-0" />
+                    <span className="font-bold text-indigo-600 truncate">{text}</span>
                 </div>
             )
         },
         {
-            title: "权限位 (bitwise)",
+            title: "权限位",
             dataIndex: "bitwise",
-            width: "10%",
+            width: 70,
             render: (val) => (
                 <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
@@ -78,7 +81,7 @@ const RoleList = () => {
                         <span className="font-mono text-sm">{val}</span>
                     </div>
                     <Tag color="purple" style={{ fontSize: '11px' }}>
-                        Value: {1 << val}
+                        值: {1 << val}
                     </Tag>
                 </div>
             )
@@ -86,7 +89,7 @@ const RoleList = () => {
         {
             title: "包含用户",
             dataIndex: "users",
-            width: "15%",
+            width: 240,
             render: (users) => (
                 <div className="flex flex-wrap gap-1">
                     {users?.map(u => (
@@ -103,7 +106,7 @@ const RoleList = () => {
         {
             title: "菜单权限",
             dataIndex: "controls",
-            width: "15%",
+            width: 240,
             render: (controls) => (
                 <div className="flex flex-wrap gap-1">
                     {controls?.map(c => (
@@ -120,7 +123,7 @@ const RoleList = () => {
         {
             title: "创建时间",
             dataIndex: "created_at",
-            width: "15%",
+            width: 130,
             render: (text) => (
                 <div className="flex flex-col text-xs text-gray-500">
                     <div className="flex items-center gap-1">
@@ -134,7 +137,7 @@ const RoleList = () => {
         {
             title: "更新时间",
             dataIndex: "updated_at",
-            width: "15%",
+            width: 130,
             render: (text) => (
                 <div className="flex flex-col text-xs text-gray-500">
                     <div className="flex items-center gap-1">
@@ -170,12 +173,13 @@ const RoleList = () => {
             AddEditForm={AddEdit}
             initialValues={initialValues}
             modalWidth={500}
+            actionWidth={300}
             batchActions={batchActions}
             renderActions={(record) => (
                 <>
-                    <Button 
-                        type="link" 
-                        size="small" 
+                    <Button
+                        type="link"
+                        size="small"
                         onClick={() => handleManageUsers(record)}
                         icon={<LinkOutlined className="text-indigo-500" />}
                     >

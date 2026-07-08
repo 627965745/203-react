@@ -13,7 +13,7 @@ const ReagentStorageList = () => {
         {
             title: "序号",
             dataIndex: "id",
-            width: "15%",
+            width: 70,
             align: "center",
         },
         {

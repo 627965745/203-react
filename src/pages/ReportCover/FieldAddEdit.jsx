@@ -70,7 +70,7 @@ const FieldAddEdit = ({ record, onChange }) => {
             <div>
                 <div className="mb-2">字段键名 (Key) <span className="text-red-500">*</span></div>
                 <Input
-                    placeholder="Word书签或占位符标记 (如: project_name)"
+                    placeholder="Word书签或占位符标记 (如: 项目名称)"
                     value={record.key || ""}
                     onChange={(e) => updateField("key", e.target.value)}
                     status={errors.key ? "error" : ""}

@@ -33,6 +33,8 @@ import ThermometerPage from './pages/MonitorAdmin/Thermometer';
 import ProcessingManagerPage from './pages/ProcessingManager';
 import ReferenceMaterialMediumTypePage from './pages/ReferenceMaterialMediumType';
 import ControlPage from './pages/Control';
+import SharePage from './pages/Share';
+import FileSharePage from './pages/Share/FileShare';
 import {
   AdminHome,
   ResetPasswordPage
@@ -85,6 +87,8 @@ const App = () => {
             <Route path="Role" element={<RolePage />} />
             <Route path="User" element={<UserPage />} />
             <Route path="Log" element={<LogPage />} />
+            <Route path="files" element={<SharePage />} />
+            <Route path="fileshare" element={<FileSharePage />} />
           </Route>
 
           <Route

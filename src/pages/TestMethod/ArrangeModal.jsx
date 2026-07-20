@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Select, message, Spin, Button, Space } from 'antd';
-import { itemTestMethod, arrangeTestMethod } from '../../api/testMethod';
+// V2: arrange 端点重命名为 itemArrange
+import { itemTestMethod, itemArrangeTestMethod } from '../../api/testMethod';
 
 const ArrangeModal = ({ visible, onClose, record, onSuccess }) => {
     const [loading, setLoading] = useState(false);
@@ -23,9 +24,10 @@ const ArrangeModal = ({ visible, onClose, record, onSuccess }) => {
     const fetchItems = async (searchQuery = '') => {
         setLoading(true);
         try {
-            const res = await itemTestMethod({ 
-                id: record?.id, 
-                query: searchQuery 
+            const res = await itemTestMethod({
+                // V2: /item 请求体由 id 改为 ids
+                ids: record?.id ? [record.id] : [],
+                query: searchQuery
             });
             if (res.data.status === 0) {
                 setItems(res.data.data || []);
@@ -42,7 +44,7 @@ const ArrangeModal = ({ visible, onClose, record, onSuccess }) => {
     const handleOk = async () => {
         setSubmitting(true);
         try {
-            const res = await arrangeTestMethod({
+            const res = await itemArrangeTestMethod({
                 ids: [record.id],
                 item_ids: selectedIds
             });

@@ -35,6 +35,8 @@ import ReferenceMaterialMediumTypePage from './pages/ReferenceMaterialMediumType
 import ControlPage from './pages/Control';
 import SharePage from './pages/Share';
 import FileSharePage from './pages/Share/FileShare';
+import WorkloadCommonPage from './pages/WorkloadCommon';
+import WorkloadManagerPage from './pages/GeneralManager/Workload';
 import {
   AdminHome,
   ResetPasswordPage
@@ -89,6 +91,8 @@ const App = () => {
             <Route path="Log" element={<LogPage />} />
             <Route path="files" element={<SharePage />} />
             <Route path="fileshare" element={<FileSharePage />} />
+            <Route path="/workloadCommon" element={<WorkloadCommonPage />} />
+            <Route path="/workloadManager" element={<WorkloadManagerPage />} />
           </Route>
 
           <Route

@@ -6,15 +6,15 @@ import { approveTestingSample } from '../../../api/testing';
 const ApproveModal = ({ open, onCancel, onSuccess, data }) => {
     const [loading, setLoading] = useState(false);
 
-    // data structure: { sampleIds, itemId, methodIds, details: [{ labCode, itemName, methodName }] }
-    const { sampleIds = [], itemId, methodIds = [], details = [] } = data || {};
+    // V2: data structure: { sampleIds, methodIds, details: [{ labCode, methodName }] } —— 移除 item_id
+    const { sampleIds = [], methodIds = [], details = [] } = data || {};
 
     const handleApprove = async () => {
         setLoading(true);
         try {
             const res = await approveTestingSample({
                 sample_ids: sampleIds,
-                item_id: itemId,
+                // V2: 移除 item_id
                 method_ids: methodIds
             });
 
@@ -38,11 +38,7 @@ const ApproveModal = ({ open, onCancel, onSuccess, data }) => {
             key: 'labCode',
             render: (text) => <span className="font-mono font-bold text-slate-700">{text}</span>
         },
-        {
-            title: '检测项目',
-            dataIndex: 'itemName',
-            key: 'itemName',
-        },
+        // V2: 方法上提到样品级，移除“检测项目”列
         {
             title: '检测方法',
             dataIndex: 'methodName',
@@ -55,12 +51,12 @@ const ApproveModal = ({ open, onCancel, onSuccess, data }) => {
             dataIndex: 'results',
             key: 'results',
             render: (results) => (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col gap-1">
                     {results && results.length > 0 ? (
                         results.map((r, i) => (
-                            <div key={i} className="flex items-center bg-white px-2 py-1 rounded border border-slate-200 text-[14px]">
-                                <span className="text-slate-400 mr-1">{r.name}:</span>
-                                <span className="font-bold text-slate-700">{r.value}</span>
+                            <div key={i} className="flex items-start bg-white px-2 py-1.5 rounded border border-slate-200 text-[14px]">
+                                <span className="text-slate-400 mr-1 shrink-0 pt-[1px]">{r.name}:</span>
+                                <span className="font-bold text-slate-700 break-words whitespace-pre-wrap flex-1 min-w-0">{r.value}</span>
                             </div>
                         ))
                     ) : (

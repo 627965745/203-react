@@ -1,12 +1,15 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import CrudTable from "../../components/CrudTable";
 import BatchArrangeModal from "../../components/CrudTable/BatchArrangeModal";
-import { readTestMethod, createTestMethod, updateTestMethod, deleteTestMethod, arrangeTestMethod } from "../../api/testMethod";
+// V2: arrange 端点重命名为 itemArrange
+import { readTestMethod, createTestMethod, updateTestMethod, deleteTestMethod, itemArrangeTestMethod } from "../../api/testMethod";
 import { comboTestItem } from "../../api/testItem";
 import AddEdit from './AddEdit';
 import FieldDrawer from './FieldDrawer';
 import ArrangeModal from './ArrangeModal';
-import { SafetyCertificateOutlined, CodeOutlined, SettingOutlined, LinkOutlined, DownloadOutlined } from "@ant-design/icons";
+// V2: 新增 检测方法↔加工选项 关联弹窗
+import ProcessingOptionArrangeModal from './ProcessingOptionArrangeModal';
+import { SafetyCertificateOutlined, CodeOutlined, SettingOutlined, LinkOutlined, DownloadOutlined, DeploymentUnitOutlined } from "@ant-design/icons";
 import { Button, Tag, Tooltip } from "antd";
 import axios from "axios";
 
@@ -16,6 +19,9 @@ const TestMethodList = () => {
 
     const [arrangeVisible, setArrangeVisible] = useState(false);
     const [arrangeRecord, setArrangeRecord] = useState(null);
+    // V2: 加工选项关联弹窗状态
+    const [procArrangeVisible, setProcArrangeVisible] = useState(false);
+    const [procArrangeRecord, setProcArrangeRecord] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
     const [methods, setMethods] = useState([]);
 
@@ -73,26 +79,41 @@ const TestMethodList = () => {
         setArrangeVisible(true);
     }, []);
 
+    // V2: 打开 检测方法↔加工选项 关联弹窗
+    const handleManageProcessing = useCallback((record) => {
+        setProcArrangeRecord(record);
+        setProcArrangeVisible(true);
+    }, []);
+
     const renderActions = useCallback((record) => (
         <div className="flex space-x-1">
-            <Button 
-                type="link" 
-                size="small" 
+            <Button
+                type="link"
+                size="small"
                 onClick={() => handleManageFields(record)}
                 icon={<SettingOutlined className="text-purple-500" />}
             >
                 参数
             </Button>
-            <Button 
-                type="link" 
-                size="small" 
+            <Button
+                type="link"
+                size="small"
                 onClick={() => handleManageItems(record)}
                 icon={<LinkOutlined className="text-indigo-500" />}
             >
                 关联项目
             </Button>
+            {/* V2: 新增 关联加工方法（加工选项）入口 */}
+            <Button
+                type="link"
+                size="small"
+                onClick={() => handleManageProcessing(record)}
+                icon={<DeploymentUnitOutlined className="text-orange-500" />}
+            >
+                关联加工
+            </Button>
         </div>
-    ), [handleManageFields, handleManageItems]);
+    ), [handleManageFields, handleManageItems, handleManageProcessing]);
 
     const columns = useMemo(() => [
         {
@@ -131,7 +152,7 @@ const TestMethodList = () => {
         {
             title: "标准文件",
             dataIndex: "standard_file",
-            width: 140,
+            width: 120,
             render: (url, record) =>
                 url ? (
                     <span
@@ -156,6 +177,23 @@ const TestMethodList = () => {
                         </Tag>
                     ))}
                     {(!items || items.length === 0) && <span className="text-gray-300 italic text-[11px]">无</span>}
+                </div>
+            )
+        },
+        {
+            // V2: 展示该方法关联的加工选项（processing_options）
+            title: "关联加工选项",
+            dataIndex: "processing_options",
+            width: 220,
+            render: (options) => (
+                <div className="flex flex-wrap gap-1">
+                    {options?.map(o => (
+                        <Tag color="orange" key={o.id} className="m-0 text-[11px] leading-[18px]">
+                            {o.processing_method_name}
+                            {o.processing_option_value ? ` - ${o.processing_option_value}` : ''}
+                        </Tag>
+                    ))}
+                    {(!options || options.length === 0) && <span className="text-gray-300 italic text-[11px]">无</span>}
                 </div>
             )
         }
@@ -185,7 +223,7 @@ const TestMethodList = () => {
                 AddEditForm={AddEdit}
                 initialValues={initialValues}
                 modalWidth={500}
-                actionWidth={280}
+                actionWidth={290}
                 batchActions={batchActions}
                 renderActions={renderActions}
                 onDataLoaded={setMethods}
@@ -202,12 +240,19 @@ const TestMethodList = () => {
                 record={methods.find(m => m.id === arrangeRecord?.id)}
                 onSuccess={() => setRefreshKey(prev => prev + 1)}
             />
+            {/* V2: 检测方法↔加工选项 关联弹窗 */}
+            <ProcessingOptionArrangeModal
+                visible={procArrangeVisible}
+                onClose={() => setProcArrangeVisible(false)}
+                record={methods.find(m => m.id === procArrangeRecord?.id)}
+                onSuccess={() => setRefreshKey(prev => prev + 1)}
+            />
             <BatchArrangeModal
                 open={batchArrangeOpen}
                 title="批量关联检测项目"
                 hint="请为所选检测方法统一关联适用的检测项目（支持多选）："
                 comboApi={comboTestItem}
-                arrangeApi={arrangeTestMethod}
+                arrangeApi={itemArrangeTestMethod}
                 extraKey="item_ids"
                 selectedRows={batchRows}
                 optionsBuilder={(cats) =>

@@ -1,27 +1,24 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Modal, Form, Select, Radio, Cascader, message, Spin, DatePicker } from 'antd';
+import { Modal, Form, Select, Cascader, message, Spin, DatePicker } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { distributeSample, readSample } from '../../../../api/workflow';
 import { comboDepartment } from '../../../../api/department';
 
-const BatchDistributeModal = ({ 
-    open, 
-    onCancel, 
-    taskId, 
-    onSuccess 
+// V2: 方法上提到样品级，级联由 样品>项目>方法 三级简化为 样品>方法 两级；下发移除 item_id
+const BatchDistributeModal = ({
+    open,
+    onCancel,
+    taskId,
+    onSuccess
 }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [taskSamples, setTaskSamples] = useState([]);
-    const [testItems, setTestItems] = useState([]);
-    const [itemMethodMap, setItemMethodMap] = useState({});
     const [departments, setDepartments] = useState([]);
-    
-    const scope = Form.useWatch('scope', form);
-    const selectedSampleIds = Form.useWatch('sample_ids', form);
 
     const lastTaskId = React.useRef(taskId);
-    
+
     useEffect(() => {
         if (open && taskId) {
             if (taskId !== lastTaskId.current) {
@@ -39,48 +36,10 @@ const BatchDistributeModal = ({
                 readSample({ task_id: taskId, limit: 1000 }),
                 comboDepartment()
             ]);
-            
+
             const samples = resSamples.data.data?.rows || resSamples.data.data || [];
             setTaskSamples(samples);
             setDepartments(resDepts.data.data || []);
-            
-            const allItemsMap = new Map();
-            const methodMap = {}; // { itemId: [ { id, name } ] }
-            
-            samples.forEach(s => {
-                s.items?.forEach(item => {
-                    const itemId = item.item_id || item.id;
-                    const itemName = item.item_name || item.name;
-                    
-                    if (itemId) {
-                        if (!allItemsMap.has(itemId)) {
-                            allItemsMap.set(itemId, { id: itemId, name: itemName });
-                        }
-                        
-                        // Collect methods for this item from this sample
-                        if (item.methods?.length > 0) {
-                            if (!methodMap[itemId]) methodMap[itemId] = new Map();
-                            item.methods.forEach(m => {
-                                const mId = m.method_id || m.id;
-                                const mName = m.method_name || m.name;
-                                if (mId && !methodMap[itemId].has(mId)) {
-                                    methodMap[itemId].set(mId, { id: mId, name: mName });
-                                }
-                            });
-                        }
-                    }
-                });
-            });
-            
-            setTestItems(Array.from(allItemsMap.values()));
-            
-            // Convert Map to array for itemMethodMap
-            const finalMethodMap = {};
-            Object.keys(methodMap).forEach(itemId => {
-                finalMethodMap[itemId] = Array.from(methodMap[itemId].values());
-            });
-            setItemMethodMap(finalMethodMap);
-            
         } catch (error) {
             message.error("加载数据失败");
         } finally {
@@ -90,89 +49,66 @@ const BatchDistributeModal = ({
 
     const cascaderOptions = useMemo(() => {
         return taskSamples.map(s => {
-            const itemNodes = (s.items || []).map(item => {
-                const itemId = item.item_id || item.id;
-                const itemName = item.item_name || item.name;
-                const isProcessing = item.processing_status === 1;
-                const methodNodes = (item.methods || []).map(m => {
-                    const isDistributed = m.status > 0;
-                    const methodName = m.method_name || m.name;
-                    // If the item is processing, all its methods are naturally disabled for distribution
-                    const isMethodDisabled = isProcessing || isDistributed;
-                    return {
-                        label: isDistributed ? `${methodName} (已下发)` : methodName,
-                        value: m.method_id || m.id,
-                        disabled: isMethodDisabled
-                    };
-                });
-
-                const allMethodsLocked = methodNodes.every(m => m.disabled);
-                const isItemLocked = isProcessing || allMethodsLocked;
-
+            // V2: 加工状态读取样品级
+            const isProcessing = s.processing_status === 1;
+            const methodNodes = (s.methods || []).map(m => {
+                const isDistributed = m.status > 0;
+                const methodName = m.method_name || m.name;
+                // 样品在加工中时，其所有方法都不能下发
+                const isMethodDisabled = isProcessing || isDistributed;
                 return {
-                    label: isItemLocked ? (
-                        <span className="text-slate-400">
-                            {isProcessing ? `${itemName} (加工中)` : `${itemName} (已全部下发)`}
-                        </span>
-                    ) : itemName,
-                    value: itemId,
-                    children: methodNodes,
-                    isLocked: isItemLocked // Helper for parent node
+                    label: isDistributed ? `${methodName} (已下发)` : methodName,
+                    value: m.method_id || m.id,
+                    disabled: isMethodDisabled
                 };
-            }).filter(node => node.children && node.children.length > 0);
+            });
 
-            const allItemsLocked = itemNodes.every(node => node.isLocked);
+            const allMethodsLocked = methodNodes.every(m => m.disabled);
             const sampleLabel = `${s.client_code || '未命名'} (#${s.id})`;
 
             return {
-                label: allItemsLocked ? (
+                label: (isProcessing || allMethodsLocked) ? (
                     <span className="text-slate-400">
-                        {sampleLabel}
+                        {isProcessing ? `${sampleLabel} (加工中)` : `${sampleLabel} (已全部下发)`}
                     </span>
                 ) : sampleLabel,
                 value: s.id,
-                children: itemNodes
+                children: methodNodes
             };
         }).filter(node => node.children && node.children.length > 0);
     }, [taskSamples]);
 
     const handleSubmit = async (values) => {
         try {
-            // selections is Array<[sampleId, itemId, methodId]>
+            // V2: selections is Array<[sampleId, methodId]>
             if (!values.selections || values.selections.length === 0) {
                 message.warning("请选择下发内容");
                 return;
             }
 
-            // 1. Group by itemId
-            const itemMap = {}; // { itemId: { methodId: Set<sampleId> } }
-            
-            values.selections.forEach(([sampleId, itemId, methodId]) => {
-                if (!itemMap[itemId]) itemMap[itemId] = {};
-                if (!itemMap[itemId][methodId]) itemMap[itemId][methodId] = new Set();
-                itemMap[itemId][methodId].add(sampleId);
+            // 1. 按 methodId 汇总涉及的样品集合
+            const methodMap = {}; // { methodId: Set<sampleId> }
+            values.selections.forEach(([sampleId, methodId]) => {
+                if (!methodMap[methodId]) methodMap[methodId] = new Set();
+                methodMap[methodId].add(sampleId);
             });
 
-            // 2. For each item, group methods that have the exact same set of samples
-            const promises = [];
-            Object.entries(itemMap).forEach(([itemId, methods]) => {
-                const sampleSets = {}; // { "id1,id2...": [methodId1, methodId2] }
-                
-                Object.entries(methods).forEach(([methodId, sampleSet]) => {
-                    const key = Array.from(sampleSet).sort().join(',');
-                    if (!sampleSets[key]) sampleSets[key] = [];
-                    sampleSets[key].push(Number(methodId));
-                });
+            // 2. 将样品集合完全相同的方法合并成一次下发请求
+            const sampleSets = {}; // { "id1,id2...": [methodId1, methodId2] }
+            Object.entries(methodMap).forEach(([methodId, sampleSet]) => {
+                const key = Array.from(sampleSet).sort().join(',');
+                if (!sampleSets[key]) sampleSets[key] = [];
+                sampleSets[key].push(Number(methodId));
+            });
 
-                Object.entries(sampleSets).forEach(([sampleKey, methodIds]) => {
-                    const sampleIds = sampleKey.split(',').map(Number);
-                    promises.push(distributeSample({
-                        sample_ids: sampleIds,
-                        item_id: Number(itemId),
-                        method_ids: methodIds,
-                        department_id: values.department_id,
-                        deadline: values.deadline ? values.deadline.format("YYYY-MM-DD") : null
-                    }));
+            const promises = Object.entries(sampleSets).map(([sampleKey, methodIds]) => {
+                const sampleIds = sampleKey.split(',').map(Number);
+                return distributeSample({
+                    sample_ids: sampleIds,
+                    // V2: 移除 item_id
+                    method_ids: methodIds,
+                    department_id: values.department_id,
+                    deadline: values.deadline ? values.deadline.format("YYYY-MM-DD") : null
                 });
             });
 
@@ -203,14 +139,14 @@ const BatchDistributeModal = ({
         >
             <Spin spinning={loading}>
                 <Form form={form} onFinish={handleSubmit} layout="vertical" className="mt-4">
-                    <Form.Item 
-                        name="selections" 
-                        label="选择下发内容 (样品 > 检测项目 > 试验方法)" 
+                    <Form.Item
+                        name="selections"
+                        label="选择下发内容 (样品 > 试验方法)"
                         rules={[{ required: true, message: '请选择至少一个试验方法' }]}
                     >
-                        <Cascader 
+                        <Cascader
                             multiple
-                            placeholder="请选择 样品 - 项目 - 方法" 
+                            placeholder="请选择 样品 - 方法"
                             options={cascaderOptions}
                             showSearch
                             className="w-full"

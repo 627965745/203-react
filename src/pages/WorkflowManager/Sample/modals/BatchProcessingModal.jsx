@@ -1,23 +1,23 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Modal, Form, Select, DatePicker, Radio, Cascader, message, Spin } from 'antd';
 import { ToolOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { processCreateSample, readSample } from '../../../../api/workflow';
 import { comboProcessingMethod } from '../../../../api/processingMethod';
 
-const BatchProcessingModal = ({ 
-    open, 
-    onCancel, 
-    taskId, 
-    onSuccess 
+// V2: 加工上提到样品级，批量配置不再选择“检测项目”，直接作用于任务/所选样品
+const BatchProcessingModal = ({
+    open,
+    onCancel,
+    taskId,
+    onSuccess
 }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [taskSamples, setTaskSamples] = useState([]);
-    const [testItems, setTestItems] = useState([]);
     const [procOptions, setProcOptions] = useState([]);
-    
+
     const scope = Form.useWatch('scope', form);
-    const selectedSampleIds = Form.useWatch('sample_ids', form);
 
     useEffect(() => {
         if (open && taskId) {
@@ -32,22 +32,9 @@ const BatchProcessingModal = ({
                 readSample({ task_id: taskId, limit: 1000 }),
                 comboProcessingMethod()
             ]);
-            
+
             const samples = resSamples.data.data?.rows || resSamples.data.data || [];
             setTaskSamples(samples);
-            
-            const allItemsMap = new Map();
-            samples.forEach(s => {
-                s.items?.forEach(item => {
-                    const itemId = item.item_id || item.id;
-                    const itemName = item.item_name || item.name;
-                    if (itemId && !allItemsMap.has(itemId)) {
-                        allItemsMap.set(itemId, { id: itemId, name: itemName });
-                    }
-                });
-            });
-            
-            setTestItems(Array.from(allItemsMap.values()));
             setProcOptions(resOptions.data.data || []);
         } catch (error) {
             message.error("加载数据失败");
@@ -55,18 +42,6 @@ const BatchProcessingModal = ({
             setLoading(false);
         }
     };
-
-    const filteredItems = useMemo(() => {
-        if (scope !== 'samples' || !selectedSampleIds?.length) {
-            return testItems;
-        }
-        const availableItemIds = new Set();
-        taskSamples
-            .filter(s => selectedSampleIds.includes(s.id))
-            .forEach(s => s.items?.forEach(i => availableItemIds.add(i.item_id || i.id)));
-        
-        return testItems.filter(i => availableItemIds.has(i.id));
-    }, [scope, selectedSampleIds, testItems, taskSamples]);
 
     const cascaderOptions = useMemo(() => {
         return procOptions.map(m => ({
@@ -84,7 +59,7 @@ const BatchProcessingModal = ({
             const isTaskScope = values.scope === 'task';
             const payload = {
                 ...(isTaskScope ? { task_id: taskId } : { sample_ids: values.sample_ids }),
-                item_ids: values.item_ids,
+                // V2: 移除 item_ids，加工直接作用于样品
                 option_ids: values.option_ids?.map(path => Array.isArray(path) ? path[path.length - 1] : path),
                 deadline: values.deadline ? values.deadline.format("YYYY-MM-DD") : null
             };
@@ -144,15 +119,7 @@ const BatchProcessingModal = ({
                         </Form.Item>
                     )}
 
-                    <Form.Item name="item_ids" label="目标检测项目" rules={[{ required: true, message: '请选择要配置的项目' }]}>
-                        <Select 
-                            mode="multiple" 
-                            placeholder="选择受影响的项目" 
-                            options={filteredItems.map(i => ({ label: i.name, value: i.id }))}
-                            filterOption={(input, option) => option.label.toLowerCase().includes(input.toLowerCase())}
-                        />
-                    </Form.Item>
-
+                    {/* V2: 移除“目标检测项目”选择 —— 加工按样品统一配置 */}
                     <Form.Item name="option_ids" label="加工方法与选项" rules={[{ required: true, message: '请选择加工方法' }]}>
                         <Cascader 
                             multiple

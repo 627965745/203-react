@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Drawer, Tabs, Table, Button, Space, message, Tag, Empty, Popconfirm, Divider, Card, Modal, Form, Select, DatePicker, Tooltip } from "antd";
+import { Drawer, Tabs, Table, Button, Space, message, Tag, Empty, Popconfirm, Divider, Card, Modal, Form, Select, DatePicker, Tooltip, Popover, Spin } from "antd";
 
 // Custom hook to safely update state only when the component is mounted, preventing memory leaks
 const useSafeState = (initialVal, isMounted) => {
@@ -18,6 +18,9 @@ import {
     RollbackOutlined, AuditOutlined, DownloadOutlined, CalendarOutlined
 } from "@ant-design/icons";
 import { comboDepartment } from "../../api/department";
+// V2: 添加加工任务时才现查该方法的 processing_options（不再依赖 sample.methods[] 上是否带此字段）
+import { methodTestItem } from "../../api/testItem";
+import { comboProcessingMethod } from "../../api/processingMethod";
 import dayjs from "dayjs";
 
 // Modals - we'll assume they are in the same directory or passed as props
@@ -28,6 +31,7 @@ import ResultEntryModal from "./modals/ResultEntryModal";
 import ItemConfigModal from "./modals/ItemConfigModal";
 import ApproveModal from "./modals/ApproveModal";
 import ReviewModal from "./modals/ReviewModal";
+import ProcessingOptionSelector from "./ProcessingOptionSelector";
 
 const ProcessingStatusMap = {
     0: { label: "不加工", color: "default", icon: <InfoCircleOutlined /> },
@@ -97,9 +101,7 @@ const DetailDrawer = ({
     const sampleId = sampleData?.id;
     
     // UI Local States
-    const [activeItemId, setActiveItemId] = useSafeState(null, isMounted);
-    const [activeItemName, setActiveItemName] = useSafeState("", isMounted);
-    const [activeItemData, setActiveItemData] = useSafeState(null, isMounted);
+    // V2: 移除 activeItem* 相关状态 —— 方法/加工配置改为样品级，不再绑定单个检测项目
     const [editingInput, setEditingInput] = useSafeState(null, isMounted);
 
     // Modal Visibility
@@ -131,6 +133,15 @@ const DetailDrawer = ({
     const [selectedHelperData, setSelectedHelperData] = useSafeState(null, isMounted);
     const [helperForm] = Form.useForm();
 
+    // V2: 样品级加工任务弹窗状态
+    const [procTaskVisible, setProcTaskVisible] = useSafeState(false, isMounted);
+    const [procTaskOptionIds, setProcTaskOptionIds] = useSafeState([], isMounted);
+    const [procTaskDeadline, setProcTaskDeadline] = useSafeState(null, isMounted);
+    const [procTaskLoading, setProcTaskLoading] = useSafeState(false, isMounted);
+    const [suggestedProcOptions, setSuggestedProcOptions] = useSafeState([], isMounted);
+    const [allProcOptions, setAllProcOptions] = useSafeState([], isMounted);
+    const [procTaskOptionsLoading, setProcTaskOptionsLoading] = useSafeState(false, isMounted);
+
     const isEditable = useMemo(() => {
         if (!sampleData) return true;
         // If creator_id is null, it's an ordinary sample from management group.
@@ -154,13 +165,17 @@ const DetailDrawer = ({
                 }
                 setSampleData(data);
             }
-            // Pre-load recipient list (departments or users)
-            const api = comboRecipient || comboDepartment;
-            if (api) {
-                api().then(res => setDepartments(res.data.data || []));
-            }
         }
     }, [visible, initialSampleData, taskLabCode]);
+
+    // V2: 打开抽屉时不再预拉取科室/人员下拉，仅在打开“下发科室 / 辅助人员”弹窗时按需加载
+    const loadRecipients = () => {
+        const api = comboRecipient || comboDepartment;
+        // 已加载则复用，避免重复请求
+        if (api && departments.length === 0) {
+            api().then(res => setDepartments(res.data.data || []));
+        }
+    };
 
     const fetchSampleDetail = async () => {
         // We keep this function for post-mutation refresh if onSuccess is not enough
@@ -169,14 +184,13 @@ const DetailDrawer = ({
         if (apis.onSuccess) apis.onSuccess();
     };
 
-    const openApproveModal = (item, method) => {
+    // V2: 方法上提到样品级，审批/审核/撤回不再需要 item_id
+    const openApproveModal = (method) => {
         setApproveData({
             sampleIds: [sampleData.id],
-            itemId: item.item_id || item.id,
             methodIds: [method.method_id || method.id],
             details: [{
                 labCode: `${sampleData.task_lab_code}-${sampleData.lab_code?.toString().padStart(4, '0')}`,
-                itemName: item.item_name || item.name,
                 methodName: method.method_name || method.name,
                 results: method.results || []
             }]
@@ -184,13 +198,11 @@ const DetailDrawer = ({
         setApproveVisible(true);
     };
 
-    const openReviewModal = (item, method) => {
+    const openReviewModal = (method) => {
         setReviewData({
             sampleIds: [sampleData.id],
-            itemId: item.item_id || item.id,
             details: [{
                 labCode: `${sampleData.task_lab_code}-${sampleData.lab_code?.toString().padStart(4, '0')}`,
-                itemName: item.item_name || item.name,
                 methodName: method.method_name || method.name,
                 methodId: method.method_id || method.id,
                 results: method.results || []
@@ -199,13 +211,13 @@ const DetailDrawer = ({
         setReviewVisible(true);
     };
 
-    const handleRollback = async (item, method) => {
+    const handleRollback = async (method) => {
         if (!rollback) return;
         setRollingBack(true);
         try {
             const res = await rollback({
                 sample_ids: [sampleData.id],
-                item_id: item.item_id || item.id,
+                // V2: 移除 item_id
                 method_ids: [method.method_id || method.id]
             });
 
@@ -223,12 +235,12 @@ const DetailDrawer = ({
         }
     };
 
-    const handleDownloadTemplate = async (item, method) => {
+    const handleDownloadTemplate = async (method) => {
         if (!templateSample) return;
         const hide = message.loading("正在准备导出模板数据...", 0);
         try {
             const res = await templateSample({
-                item_id: item.item_id || item.id,
+                // V2: 结果模板不再需要 item_id，仅传 method_id
                 method_id: method.method_id || method.id,
                 sample_ids: [sampleData.id]
             });
@@ -316,16 +328,16 @@ const DetailDrawer = ({
         } catch (error) {}
     };
 
-    // --- Unified Config Logic ---
-    const handleMethodSave = async (itemId, values) => {
+    // --- Unified Config Logic (V2: 方法/加工上提到样品级，全部移除 item_id) ---
+    const handleMethodSave = async (values) => {
         try {
             if (!methodCreate) return message.warning("无此操作权限");
             // Remove single method_id from spread values to avoid redundant/wrong parameters
             const { method_id, ...otherValues } = values;
             const payload = {
                 sample_ids: [sampleId],
-                item_id: itemId,
-                method_ids: [method_id],
+                // V2: 不再传 item_id
+                method_ids: Array.isArray(method_id) ? method_id : [method_id],
                 ...otherValues
             };
             await methodCreate(payload);
@@ -335,14 +347,14 @@ const DetailDrawer = ({
         } catch (error) {}
     };
 
-    const handleProcessSave = async (itemId, values) => {
+    const handleProcessSave = async (values) => {
         try {
-            const item = sampleData.items?.find(i => (i.item_id || i.id) === itemId);
-            const api = item?.processing_status === 1 ? processUpdate : processCreate;
+            // V2: 加工状态读取样品级 processing_status
+            const api = sampleData?.processing_status === 1 ? processUpdate : processCreate;
             if (!api) return message.warning("无此操作权限");
             const payload = {
                 sample_ids: [sampleId],
-                item_ids: [itemId],
+                // V2: 移除 item_ids，加工直接作用于样品
                 ...values
             };
             await api(payload);
@@ -352,35 +364,100 @@ const DetailDrawer = ({
         } catch (error) {}
     };
 
-    const handleProcessDelete = async (itemId) => {
+    const handleProcessDelete = async () => {
         try {
             if (!processDelete) return message.warning("无此操作权限");
-            await processDelete({ sample_ids: [sampleId], item_ids: [itemId] });
+            // V2: 移除 item_ids
+            await processDelete({ sample_ids: [sampleId] });
             message.success("加工处理已清除");
             setHasChanged(true);
             fetchSampleDetail();
         } catch (error) {}
     };
 
-    const handleMethodDelete = async (itemId, methodId) => {
+    const handleMethodDelete = async (methodId) => {
         try {
             if (!methodDelete) return message.warning("无此操作权限");
-            await methodDelete({ sample_ids: [sampleId], item_id: itemId, method_ids: [methodId] });
+            // V2: 移除 item_id
+            await methodDelete({ sample_ids: [sampleId], method_ids: [methodId] });
             message.success("已移除方法");
             setHasChanged(true);
             fetchSampleDetail();
         } catch (error) {}
     };
 
-    const openConfigModal = (item) => {
-        setActiveItemId(item.item_id || item.id);
-        setActiveItemName(item.name || item.item_name);
-        setActiveItemData(item);
+    // V2: 加工是否已锁定 —— 任一方法已下发/进行中(status>0)后不可再改加工
+    const processingLocked = useMemo(
+        () => sampleData?.methods?.some(m => m.status > 0),
+        [sampleData]
+    );
+
+    // V2: 样品下所有检测项目 id，用于查询某检测方法可用的加工选项
+    const sampleItemIds = useMemo(
+        () => (sampleData?.items || []).map(i => i.item_id || i.id),
+        [sampleData]
+    );
+
+    // V2: 打开“配置加工任务”弹窗
+    const openSampleProcTask = () => {
+        const currentIds = (sampleData?.processing || []).map(p => p.option_id || p.id);
+        setProcTaskOptionIds(currentIds);
+        setProcTaskDeadline(sampleData?.processing_deadline ? dayjs(sampleData.processing_deadline) : null);
+        setProcTaskVisible(true);
+        setProcTaskOptionsLoading(true);
+        
+        Promise.all([
+            methodTestItem({ ids: sampleItemIds }),
+            comboProcessingMethod()
+        ]).then(([methodRes, comboRes]) => {
+            const list = methodRes.data?.data || [];
+            // 过滤出当前已添加的检测方法
+            const addedMethodIds = (sampleData?.methods || []).map(m => m.method_id || m.id);
+            const addedMethods = list.filter(x => addedMethodIds.includes(x.id));
+            
+            // 提取建议的加工选项
+            const suggestedMap = new Map();
+            addedMethods.forEach(m => {
+                if (m.processing_options) {
+                    m.processing_options.forEach(opt => {
+                        suggestedMap.set(opt.id, opt);
+                    });
+                }
+            });
+            setSuggestedProcOptions(Array.from(suggestedMap.values()));
+            setAllProcOptions(comboRes.data?.data || []);
+        }).catch(() => {
+            setSuggestedProcOptions([]);
+            setAllProcOptions([]);
+        }).finally(() => {
+            setProcTaskOptionsLoading(false);
+        });
+    };
+
+    // V2: 提交加工任务 —— 把所选加工选项保存
+    const handleProcTaskSubmit = async () => {
+        if (!procTaskOptionIds.length) return message.warning("请选择加工选项");
+        if (!procTaskDeadline) return message.warning("请选择完成期限");
+        setProcTaskLoading(true);
+        try {
+            await handleProcessSave({
+                option_ids: procTaskOptionIds,
+                deadline: procTaskDeadline.format("YYYY-MM-DD"),
+            });
+            setProcTaskVisible(false);
+        } finally {
+            setProcTaskLoading(false);
+        }
+    };
+
+    // V2: 配置弹窗改为样品级（加工要求 + 方法分派），不再绑定单个检测项目
+    const openConfigModal = () => {
         setConfigModalVisible(true);
     };
 
-    const openDistributeModal = async (item, method) => {
-        setSelectedDistData({ item, method });
+    const openDistributeModal = async (method) => {
+        loadRecipients(); // V2: 打开下发弹窗时才加载接收方（科室/检测员）下拉
+        setSelectedDistData({ method });
         setDistributeVisible(true);
         distributeForm.resetFields();
     };
@@ -391,7 +468,7 @@ const DetailDrawer = ({
             if (!distribute) return message.warning("无此操作权限");
             const payload = {
                 sample_ids: [sampleId],
-                item_id: selectedDistData.item.item_id || selectedDistData.item.id,
+                // V2: 移除 item_id
                 method_ids: [selectedDistData.method.method_id || selectedDistData.method.id],
                 deadline: values.deadline ? values.deadline.format("YYYY-MM-DD") : null
             };
@@ -415,12 +492,13 @@ const DetailDrawer = ({
     };
 
     // --- Helper Logic ---
-    const openHelperModal = (item, method) => {
-        setSelectedHelperData({ item, method });
+    const openHelperModal = (method) => {
+        loadRecipients(); // V2: 打开辅助人员弹窗时才加载人员下拉
+        setSelectedHelperData({ method });
         setHelperVisible(true);
         helperForm.resetFields();
-        helperForm.setFieldsValue({ 
-            helper_ids: method.helpers?.map(h => h.user_id || h.id) || [] 
+        helperForm.setFieldsValue({
+            helper_ids: method.helpers?.map(h => h.user_id || h.id) || []
         });
     };
 
@@ -429,11 +507,11 @@ const DetailDrawer = ({
         try {
             const currentHelpers = selectedHelperData.method.helpers?.map(h => h.user_id || h.id) || [];
             const newHelpers = values.helper_ids || [];
-            
+
+            // V2: 移除 item_id；method_id 改为 method_ids 列表
             const payloadBase = {
                 sample_ids: [sampleId],
-                item_id: selectedHelperData.item.item_id || selectedHelperData.item.id,
-                method_id: selectedHelperData.method.method_id || selectedHelperData.method.id,
+                method_ids: [selectedHelperData.method.method_id || selectedHelperData.method.id],
             };
 
             // 1. First delete existing helpers to ensure a clean sync
@@ -488,336 +566,371 @@ const DetailDrawer = ({
                         key: "items",
                         label: <span className="px-4"><ExperimentOutlined /> 检测项管理</span>,
                         children: (
+                            // V2: 样品-方法扁平结构。检测项目(仅名称) 与 检测方法(完整生命周期) 左右分栏。
+                            //     加工要求框已移除，加工任务改到右侧“已添加的方法卡片”上单独添加。
                             <div className="space-y-6">
-                                <div className="flex justify-between items-center bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                                    <div className="text-slate-500 text-sm max-w-lg">
-                                        <b>工作流提示：</b> 1. 先添加该样品所需的所有检测项目； 2. 点击每个项目下方的<b>“精细化配置”</b>来设置加工工艺及试验方法。
+                                <div className="flex justify-between items-center bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                                    <div className="text-slate-500 text-sm max-w-2xl">
+                                        <b>工作流提示：</b> 左侧维护该样品所需的检测项目；右侧分派并跟踪各检测方法的完整生命周期。
                                     </div>
-                                    <Button 
-                                        type="primary" 
-                                        icon={<PlusOutlined />} 
-                                        onClick={() => setItemModalVisible(true)} 
-                                        className="bg-slate-900 border-none rounded-xl h-12 px-8 font-bold shadow-lg"
-                                        disabled={!isEditable}
-                                    >
-                                        添加检测项目
-                                    </Button>
                                 </div>
 
-                                {sampleData?.items?.length > 0 ? (
-                                    <div className="space-y-6">
-                                        {sampleData.items.map(item => (
-                                            <Card 
-                                                key={item.item_id || item.id} 
-                                                size="small"
-                                                className="shadow-sm border-slate-200 rounded-2xl overflow-hidden hover:shadow-md transition-shadow"
-                                                title={
-                                                    <div className="flex justify-between items-center py-2">
-                                                        <Space size="middle">
-                                                            <div className="flex flex-col">
-                                                                <span className="text-base font-black text-slate-800">
-                                                                    {item.name || item.item_name}
-                                                                    <Tag className="ml-2 font-mono text-[10px] bg-slate-100 border-none text-slate-500">#{item.id || item.item_id}</Tag>
-                                                                </span>
-                                                                {!hideProcessing && (
-                                                                    <Tag 
-                                                                        icon={ProcessingStatusMap[item.processing_status]?.icon} 
-                                                                        color={ProcessingStatusMap[item.processing_status]?.color}
-                                                                        className="m-0 border-none text-[10px] uppercase font-bold px-2 block mt-1 w-max"
-                                                                    >
-                                                                    {ProcessingStatusMap[item.processing_status]?.label}
-                                                                </Tag>
-                                                            )}
-                                                        </div>
-                                                    </Space>
-                                                        <Space>
-                                                            <Button 
-                                                                type="primary" 
-                                                                ghost 
-                                                                size="small" 
-                                                                icon={<SettingOutlined />} 
-                                                                onClick={() => openConfigModal(item)}
-                                                                className="rounded-lg font-bold"
-                                                            >
-                                                                {isEditable ? "精细化配置" : "查看配置详情"}
-                                                            </Button>
-                                                            {isEditable && (
-                                                                <Popconfirm title="确定移除此检测项（及其配置）吗？" onConfirm={() => handleItemDelete(item.item_id || item.id)} okText="确认删除" cancelText="取消" okButtonProps={{ danger: true }}>
-                                                                    <Button type="text" danger icon={<DeleteOutlined />} size="small">删除此项目</Button>
-                                                                </Popconfirm>
-                                                            )}
-                                                        </Space>
-                                                    </div>
-                                                }
-                                            >
-                                                <div className="bg-slate-50/30 rounded-xl p-4">
-                                                    <div className="grid grid-cols-12 gap-6">
-                                                                {!hideProcessing && (
-                                                                    <div className="col-span-4">
-                                                                        <div className="text-[12px] text-slate-400 font-bold uppercase tracking-wider mb-2">前处理要求</div>
-                                                                        <div className="flex flex-wrap gap-2">
-                                                                            {item.processing?.length > 0 ? (
-                                                                                item.processing.map(proc => (
-                                                                                    <Tag key={proc.option_id || proc.id} className="bg-white border-slate-200 text-slate-600 py-1.5 px-3 rounded-lg text-sm">
-                                                                                        <span className="font-bold">{proc.method_name || proc.name}</span>
-                                                                                        { (proc.option_value || proc.value || proc.option_name) ? ` - ${proc.option_value || proc.value || proc.option_name}` : ''}
-                                                                                    </Tag>
-                                                                                ))
-                                                                            ) : (
-                                                                                <span className="text-sm text-slate-300 italic">常规处理 / 无</span>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                                <div className={hideProcessing ? "col-span-12" : "col-span-8 border-l border-slate-100 pl-6"}>
-                                                            <div className="flex items-center justify-between mb-2">
-                                                                <div className="text-[12px] text-slate-400 font-bold uppercase tracking-wider">分派试验方法</div>
-                                                                {item.methods?.length > 0 && (
-                                                                    <Tag color={MethodStatusMap[item.methods[0].status]?.color} className="m-0 border-none font-bold text-[10px] uppercase px-2">
-                                                                        {MethodStatusMap[item.methods[0].status]?.label}
-                                                                    </Tag>
-                                                                )}
-                                                            </div>
-                                                            <div className="space-y-1.5">
-                                                                {item.methods?.length > 0 ? (
-                                                                    item.methods.map(m => (
-                                                                        <div key={m.method_id || m.id} className="py-2.5 border-b border-slate-50 last:border-0">
-                                                                            <div className="flex justify-between items-center text-sm">
-                                                                                <Space>
-                                                                                    <span className="font-bold text-slate-700">{m.method_name || m.name}</span>
-                                                                                    <Tag color={MethodStatusMap[m.status]?.color} className="m-0 border-none text-[10px] font-bold uppercase px-2">
-                                                                                        {MethodStatusMap[m.status]?.label || "未知状态"}
-                                                                                    </Tag>
-                                                                                </Space>
-                                                                                <Space>
-                                                                                    {!hideDistribute && (
-                                                                                        distributeType === 'inspector' ? (
-                                                                                            <Tooltip title={
-                                                                                                item.processing_status === 1 
-                                                                                                    ? "前处理加工中，完成后方可指派" 
-                                                                                                    : (m.status > 1 ? "该方法已指派" : (m.status === 0 ? "管理组尚未下发" : "指派检测员"))
-                                                                                            }>
-                                                                                                <Button 
-                                                                                                    type="primary" 
-                                                                                                    size="small" 
-                                                                                                    disabled={item.processing_status === 1 || m.status !== 1}
-                                                                                                    onClick={() => openDistributeModal(item, m)}
-                                                                                                    className="font-bold text-[11px] rounded-lg h-7"
-                                                                                                >
-                                                                                                    指派检测员
-                                                                                                </Button>
-                                                                                            </Tooltip>
-                                                                                        ) : (
-                                                                                            <Button 
-                                                                                                type="primary" 
-                                                                                                size="small" 
-                                                                                                disabled={item.processing_status === 1 || m.status !== 0}
-                                                                                                onClick={() => openDistributeModal(item, m)}
-                                                                                                className="font-bold text-[11px] rounded-lg h-7"
-                                                                                            >
-                                                                                                下发到科室
-                                                                                            </Button>
-                                                                                        )
-                                                                                    )}
-                                                                                    {/* Review for Department Manager (status 3) or Workflow Manager (status 4) */}
-                                                                                    {((distributeType === 'inspector' && m.status === 3 && !showResultEntry) || 
-                                                                                      (distributeType === 'department' && m.status === 4)) && (
-                                                                                        <Button 
-                                                                                            type="link"
-                                                                                            size="small" 
-                                                                                            icon={<AuditOutlined />} 
-                                                                                            onClick={() => openReviewModal(item, m)}
-                                                                                            className="font-bold text-[11px] h-7 text-blue-600 hover:text-blue-700"
-                                                                                        >
-                                                                                            审核
-                                                                                        </Button>
-                                                                                    )}
-                                                                                    
-                                                                                    {/* View Results for Workflow Manager (status >= 2) */}
-                                                                                    {distributeType === 'department' && m.status >= 2 && m.status !== 4 && (
-                                                                                        <Button 
-                                                                                            type="link"
-                                                                                            size="small" 
-                                                                                            icon={<InfoCircleOutlined />} 
-                                                                                            onClick={() => {
-                                                                                                setActiveMethodData(m);
-                                                                                                setActiveItemId(item.item_id || item.id);
-                                                                                                setResultEntryVisible(true);
-                                                                                            }}
-                                                                                            className="font-bold text-[11px] h-7 text-slate-500 hover:text-slate-600"
-                                                                                        >
-                                                                                            查看数据
-                                                                                        </Button>
-                                                                                    )}
-                                                                                    
-                                                                                    {showResultEntry && m.status >= 2 && (
-                                                                                        <>
-                                                                                            <Button 
-                                                                                                type="link"
-                                                                                                size="small" 
-                                                                                                icon={m.status >= 3 ? <InfoCircleOutlined /> : <EditOutlined />} 
-                                                                                                onClick={() => {
-                                                                                                    setActiveMethodData(m);
-                                                                                                    setActiveItemId(item.item_id || item.id);
-                                                                                                    setResultEntryVisible(true);
-                                                                                                }}
-                                                                                                className="font-bold text-[11px] h-7"
-                                                                                            >
-                                                                                                {m.status >= 3 ? '查看数据' : '数据录入'}
-                                                                                            </Button>
-                                                                                            {m.status === 2 && templateSample && (
-                                                                                                <Button 
-                                                                                                    type="link"
-                                                                                                    size="small" 
-                                                                                                    icon={<DownloadOutlined />} 
-                                                                                                    onClick={() => handleDownloadTemplate(item, m)}
-                                                                                                    className="font-bold text-[11px] h-7 text-green-600 hover:text-green-700"
-                                                                                                >
-                                                                                                    下载模板
-                                                                                                </Button>
-                                                                                            )}
-                                                                                        </>
-                                                                                    )}
-                                                                                    
-                                                                                    {showResultEntry && m.status === 2 && (
-                                                                                        <Button 
-                                                                                            type="link"
-                                                                                            size="small" 
-                                                                                            icon={<SendOutlined />} 
-                                                                                            onClick={() => openApproveModal(item, m)}
-                                                                                            className="font-bold text-[11px] h-7 text-green-600 hover:text-green-700"
-                                                                                        >
-                                                                                            提交至科室
-                                                                                        </Button>
-                                                                                    )}
-                                                                                    
-                                                                                    {showResultEntry && m.status === 2 && (
-                                                                                        <Popconfirm
-                                                                                            title="退回任务"
-                                                                                            description="确定退回该任务吗？退回后该任务将重新回到科室待指派状态。"
-                                                                                            onConfirm={() => handleRollback(item, m)}
-                                                                                            okText="确认退回"
-                                                                                            cancelText="取消"
-                                                                                            okButtonProps={{ loading: rollingBack, danger: true }}
-                                                                                        >
-                                                                                            <Button 
-                                                                                                type="link"
-                                                                                                size="small" 
-                                                                                                icon={<RollbackOutlined />} 
-                                                                                                className="font-bold text-[11px] h-7 text-red-400 hover:text-red-500"
-                                                                                            >
-                                                                                                退回任务
-                                                                                            </Button>
-                                                                                        </Popconfirm>
-                                                                                    )}
-
-                                                                                    {/* Rollback for Department Manager (status 1) */}
-                                                                                    {distributeType === 'inspector' && m.status === 1 && (
-                                                                                        <Popconfirm
-                                                                                            title="撤回任务"
-                                                                                            description="确定将该任务撤回到管理组吗？"
-                                                                                            onConfirm={() => handleRollback(item, m)}
-                                                                                            okText="确认撤回"
-                                                                                            cancelText="取消"
-                                                                                            okButtonProps={{ loading: rollingBack, danger: true }}
-                                                                                        >
-                                                                                            <Button 
-                                                                                                type="link"
-                                                                                                size="small" 
-                                                                                                icon={<RollbackOutlined />} 
-                                                                                                className="font-bold text-[11px] h-7 text-red-400 hover:text-red-500"
-                                                                                            >
-                                                                                                撤回任务
-                                                                                            </Button>
-                                                                                        </Popconfirm>
-                                                                                    )}
-                                                                                    
-                                                                                    {distributeType === 'inspector' && m.status >= 1 && m.status < 3 && !hideDistribute && (
-                                                                                        <Button
-                                                                                            size="small"
-                                                                                            icon={<UserOutlined />}
-                                                                                            onClick={() => openHelperModal(item, m)}
-                                                                                            className="font-bold text-[11px] rounded-lg h-7 ml-2"
-                                                                                        >
-                                                                                            辅助人员
-                                                                                        </Button>
-                                                                                    )}
-
-                                                                                    {/* Delete method — allowed regardless of status; status is shown above */}
-                                                                                    {isEditable && methodDelete && (
-                                                                                        <Popconfirm
-                                                                                            title="确定删除此方法吗？"
-                                                                                            description={`当前状态：${MethodStatusMap[m.status]?.label || "未知"}，删除后其相关数据将一并移除。`}
-                                                                                            onConfirm={() => handleMethodDelete(item.item_id || item.id, m.method_id || m.id)}
-                                                                                            okText="确认删除"
-                                                                                            cancelText="取消"
-                                                                                            okButtonProps={{ danger: true }}
-                                                                                        >
-                                                                                            <Button
-                                                                                                type="link"
-                                                                                                size="small"
-                                                                                                danger
-                                                                                                icon={<DeleteOutlined />}
-                                                                                                className="font-bold text-[11px] h-7"
-                                                                                            >
-                                                                                                删除此方法
-                                                                                            </Button>
-                                                                                        </Popconfirm>
-                                                                                    )}
-                                                                                </Space>
-                                                                            </div>
-                                                                            
-                                                                            {(m.tester_name || m.helpers?.length > 0 || m.test_deadline) && (
-                                                                                <div className="flex flex-wrap gap-2 mt-2">
-                                                                                    {m.tester_name && (
-                                                                                        <Tag icon={<UserOutlined />} color="blue" className="m-0 border-none text-[10px] font-bold px-2 py-0.5 rounded-md">
-                                                                                            主检: {m.tester_name}
-                                                                                        </Tag>
-                                                                                    )}
-                                                                                    {m.test_deadline && (
-                                                                                        <Tag icon={<CalendarOutlined />} color="warning" className="m-0 border-none text-[10px] font-bold px-2 py-0.5 rounded-md">
-                                                                                            截止日期: {m.test_deadline}
-                                                                                        </Tag>
-                                                                                    )}
-                                                                                    {m.helpers?.map(h => {
-                                                                                        const statusCfg = {
-                                                                                            0: { label: "待确认", color: "default" },
-                                                                                            1: { label: "已接受", color: "success" },
-                                                                                            2: { label: "已拒绝", color: "error" },
-                                                                                        }[h.status] || { label: "待确认", color: "default" };
-
-                                                                                        return (
-                                                                                            <Tooltip key={h.user_id || h.id} title={statusCfg.label}>
-                                                                                                <Tag 
-                                                                                                    icon={<TeamOutlined />} 
-                                                                                                    color={statusCfg.color}
-                                                                                                    className="m-0 text-[10px] font-bold px-2 py-0.5 rounded-md"
-                                                                                                >
-                                                                                                    辅: {h.nickname || h.name}
-                                                                                                </Tag>
-                                                                                            </Tooltip>
-                                                                                        );
-                                                                                    })}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    ))
-                                                                ) : (
-                                                                    <span className="text-sm text-slate-300 italic">待指派方法</span>
-                                                                )}
-                                                            </div>
-                                                        </div>
+                                {/* V2: 样品级加工任务 */}
+                                {!hideProcessing && (
+                                    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <span className="text-sm font-black text-slate-700">
+                                                <ToolOutlined className="mr-1 text-orange-500" />加工任务
+                                            </span>
+                                            <Space>
+                                                {isEditable && !processingLocked && sampleData?.processing_status !== 2 && (
+                                                    <Button size="small" type="primary" icon={<PlusOutlined />} onClick={openSampleProcTask} className="rounded-lg font-bold bg-orange-500 border-none">
+                                                        {sampleData?.processing?.length > 0 ? "修改加工任务" : "添加加工任务"}
+                                                    </Button>
+                                                )}
+                                                {isEditable && !processingLocked && sampleData?.processing?.length > 0 && (
+                                                    <Popconfirm title="确定删除加工任务吗？" onConfirm={handleProcessDelete} okText="确认" cancelText="取消" okButtonProps={{ danger: true }}>
+                                                        <Button size="small" type="link" danger icon={<DeleteOutlined />} className="rounded-lg font-bold">删除</Button>
+                                                    </Popconfirm>
+                                                )}
+                                            </Space>
+                                        </div>
+                                        
+                                        {sampleData?.processing?.length > 0 ? (
+                                            <div className="text-sm">
+                                                <div className="mb-2">
+                                                    <span className="text-slate-400">状态：</span>
+                                                    <Tag color={ProcessingStatusMap[sampleData.processing_status]?.color} icon={ProcessingStatusMap[sampleData.processing_status]?.icon}>
+                                                        {ProcessingStatusMap[sampleData.processing_status]?.label}
+                                                    </Tag>
+                                                    {sampleData.processing_deadline && (
+                                                        <span className="ml-4"><span className="text-slate-400">截止日期：</span>{sampleData.processing_deadline.split(' ')[0]}</span>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <span className="text-slate-400">加工选项：</span>
+                                                    <div className="flex flex-wrap gap-2 mt-1">
+                                                        {sampleData.processing.map(p => (
+                                                            <Tag key={p.id || p.option_id} className="m-0 bg-orange-50 text-orange-600 border-orange-100 rounded-md px-2 py-0.5 font-bold">
+                                                                {p.method_name}
+                                                                {p.value ? ` - ${p.value}` : ''}
+                                                            </Tag>
+                                                        ))}
                                                     </div>
                                                 </div>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 flex flex-col items-center">
-                                        <Empty description={<span className="text-slate-400 font-bold mt-4">暂无关联检测项目</span>} />
-                                        <Button type="primary" onClick={() => setItemModalVisible(true)} className="mt-6 h-10 px-8 rounded-xl bg-blue-600">立即添加项目</Button>
+                                            </div>
+                                        ) : (
+                                            <div className="text-slate-400 text-xs py-2">无加工任务</div>
+                                        )}
                                     </div>
                                 )}
+
+                                {/* V2: 左右分栏 —— 左侧检测项目(4/12)、右侧检测方法(8/12，更宽) */}
+                                <div className="grid grid-cols-12 gap-5">
+                                    {/* 左：检测项目（仅名称，负责增删） */}
+                                    <div className="col-span-4">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <span className="text-sm font-black text-slate-700">
+                                                <ExperimentOutlined className="mr-1 text-blue-500" />检测项目
+                                                <span className="text-slate-400 font-mono text-xs ml-1">({sampleData?.items?.length || 0})</span>
+                                            </span>
+                                            <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setItemModalVisible(true)} disabled={!isEditable} className="rounded-lg font-bold bg-slate-900 border-none">添加项目</Button>
+                                        </div>
+                                        {sampleData?.items?.length > 0 ? (
+                                            <div className="space-y-2">
+                                                {sampleData.items.map(item => (
+                                                    <div key={item.item_id || item.id} className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow">
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="font-bold text-slate-800 text-sm truncate">{item.name || item.item_name}</span>
+                                                            <span className="font-mono text-[10px] text-slate-400">#{item.id || item.item_id}</span>
+                                                        </div>
+                                                        {isEditable && (
+                                                            <Popconfirm title="确定移除此检测项吗？" onConfirm={() => handleItemDelete(item.item_id || item.id)} okText="确认删除" cancelText="取消" okButtonProps={{ danger: true }}>
+                                                                <Button type="link" danger icon={<DeleteOutlined />} size="small">删除</Button>
+                                                            </Popconfirm>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="py-10 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center">
+                                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="text-slate-400 text-xs">暂无检测项目</span>} />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* 右：检测方法（样品级，完整生命周期与操作） */}
+                                    <div className="col-span-8 border-l border-slate-100 pl-5">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <span className="text-sm font-black text-slate-700">
+                                                <AuditOutlined className="mr-1 text-indigo-500" />检测方法
+                                                <span className="text-slate-400 font-mono text-xs ml-1">({sampleData?.methods?.length || 0})</span>
+                                            </span>
+                                            {isEditable && (
+                                                <Button size="small" type="primary" icon={<PlusOutlined />} onClick={openConfigModal} className="rounded-lg font-bold bg-slate-900 border-none">分派方法</Button>
+                                            )}
+                                        </div>
+                                        {sampleData?.methods?.length > 0 ? (
+                                            <div className="space-y-3">
+                                                {sampleData.methods.map(m => (
+                                                    <div key={m.method_id || m.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow">
+                                                        <div className="flex justify-between items-center gap-2 flex-wrap">
+                                                            <div className="font-bold text-slate-800 text-sm">{m.method_name || m.name}</div>
+                                                            <Space wrap size={[4, 4]}>
+                                                                {!hideDistribute && (
+                                                                    distributeType === 'inspector' ? (
+                                                                        <Tooltip title={
+                                                                            sampleData?.processing_status === 1
+                                                                                ? "前处理加工中，完成后方可指派"
+                                                                                : (m.status > 1 ? "该方法已指派" : (m.status === 0 ? "管理组尚未下发" : "指派检测员"))
+                                                                        }>
+                                                                            <Button
+                                                                                type="primary"
+                                                                                size="small"
+                                                                                disabled={sampleData?.processing_status === 1 || m.status !== 1}
+                                                                                onClick={() => openDistributeModal(m)}
+                                                                                className="font-bold text-[11px] rounded-lg h-7"
+                                                                            >
+                                                                                指派检测员
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                    ) : (
+                                                                        <Button
+                                                                            type="primary"
+                                                                            size="small"
+                                                                            disabled={sampleData?.processing_status === 1 || m.status !== 0}
+                                                                            onClick={() => openDistributeModal(m)}
+                                                                            className="font-bold text-[11px] rounded-lg h-7"
+                                                                        >
+                                                                            下发到科室
+                                                                        </Button>
+                                                                    )
+                                                                )}
+                                                                {/* Review for Department Manager (status 3) or Workflow Manager (status 4) */}
+                                                                {((distributeType === 'inspector' && m.status === 3 && !showResultEntry) ||
+                                                                  (distributeType === 'department' && m.status === 4)) && (
+                                                                    <Button
+                                                                        type="link"
+                                                                        size="small"
+                                                                        icon={<AuditOutlined />}
+                                                                        onClick={() => openReviewModal(m)}
+                                                                        className="font-bold text-[11px] h-7 text-blue-600 hover:text-blue-700"
+                                                                    >
+                                                                        审核
+                                                                    </Button>
+                                                                )}
+
+                                                                {/* View Results for Workflow Manager (status >= 2) */}
+                                                                {distributeType === 'department' && m.status >= 2 && m.status !== 4 && (
+                                                                    <Button
+                                                                        type="link"
+                                                                        size="small"
+                                                                        icon={<InfoCircleOutlined />}
+                                                                        onClick={() => {
+                                                                            setActiveMethodData(m);
+                                                                            setResultEntryVisible(true);
+                                                                        }}
+                                                                        className="font-bold text-[11px] h-7 text-slate-500 hover:text-slate-600"
+                                                                    >
+                                                                        查看数据
+                                                                    </Button>
+                                                                )}
+
+                                                                {showResultEntry && m.status >= 2 && (
+                                                                    <>
+                                                                        <Button
+                                                                            type="link"
+                                                                            size="small"
+                                                                            icon={m.status >= 3 ? <InfoCircleOutlined /> : <EditOutlined />}
+                                                                            onClick={() => {
+                                                                                setActiveMethodData(m);
+                                                                                setResultEntryVisible(true);
+                                                                            }}
+                                                                            className="font-bold text-[11px] h-7"
+                                                                        >
+                                                                            {m.status >= 3 ? '查看数据' : '数据录入'}
+                                                                        </Button>
+                                                                        {m.status === 2 && templateSample && (
+                                                                            <Button
+                                                                                type="link"
+                                                                                size="small"
+                                                                                icon={<DownloadOutlined />}
+                                                                                onClick={() => handleDownloadTemplate(m)}
+                                                                                className="font-bold text-[11px] h-7 text-green-600 hover:text-green-700"
+                                                                            >
+                                                                                下载模板
+                                                                            </Button>
+                                                                        )}
+                                                                    </>
+                                                                )}
+
+                                                                {showResultEntry && m.status === 2 && (
+                                                                    <Button
+                                                                        type="link"
+                                                                        size="small"
+                                                                        icon={<SendOutlined />}
+                                                                        onClick={() => openApproveModal(m)}
+                                                                        className="font-bold text-[11px] h-7 text-green-600 hover:text-green-700"
+                                                                    >
+                                                                        提交至科室
+                                                                    </Button>
+                                                                )}
+
+                                                                {showResultEntry && m.status === 2 && (
+                                                                    <Popconfirm
+                                                                        title="退回任务"
+                                                                        description="确定退回该任务吗？退回后该任务将重新回到科室待指派状态。"
+                                                                        onConfirm={() => handleRollback(m)}
+                                                                        okText="确认退回"
+                                                                        cancelText="取消"
+                                                                        okButtonProps={{ loading: rollingBack, danger: true }}
+                                                                    >
+                                                                        <Button
+                                                                            type="link"
+                                                                            size="small"
+                                                                            icon={<RollbackOutlined />}
+                                                                            className="font-bold text-[11px] h-7 text-red-400 hover:text-red-500"
+                                                                        >
+                                                                            退回任务
+                                                                        </Button>
+                                                                    </Popconfirm>
+                                                                )}
+
+                                                                {/* Rollback for Department Manager (status 1) */}
+                                                                {distributeType === 'inspector' && m.status === 1 && (
+                                                                    <Popconfirm
+                                                                        title="撤回任务"
+                                                                        description="确定将该任务撤回到管理组吗？"
+                                                                        onConfirm={() => handleRollback(m)}
+                                                                        okText="确认撤回"
+                                                                        cancelText="取消"
+                                                                        okButtonProps={{ loading: rollingBack, danger: true }}
+                                                                    >
+                                                                        <Button
+                                                                            type="link"
+                                                                            size="small"
+                                                                            icon={<RollbackOutlined />}
+                                                                            className="font-bold text-[11px] h-7 text-red-400 hover:text-red-500"
+                                                                        >
+                                                                            撤回任务
+                                                                        </Button>
+                                                                    </Popconfirm>
+                                                                )}
+
+                                                                {distributeType === 'inspector' && m.status >= 1 && m.status < 3 && !hideDistribute && (
+                                                                    <Button
+                                                                        size="small"
+                                                                        icon={<UserOutlined />}
+                                                                        onClick={() => openHelperModal(m)}
+                                                                        className="font-bold text-[11px] rounded-lg h-7"
+                                                                    >
+                                                                        辅助人员
+                                                                    </Button>
+                                                                )}
+
+
+
+                                                                {/* Delete method — allowed regardless of status; status is shown above */}
+                                                                {isEditable && methodDelete && (
+                                                                    <Popconfirm
+                                                                        title="确定删除此方法吗？"
+                                                                        description={`当前状态：${MethodStatusMap[m.status]?.label || "未知"}，删除后其相关数据将一并移除。`}
+                                                                        onConfirm={() => handleMethodDelete(m.method_id || m.id)}
+                                                                        okText="确认删除"
+                                                                        cancelText="取消"
+                                                                        okButtonProps={{ danger: true }}
+                                                                    >
+                                                                        <Button
+                                                                            type="link"
+                                                                            size="small"
+                                                                            danger
+                                                                            icon={<DeleteOutlined />}
+                                                                            className="font-bold text-[11px] h-7"
+                                                                        >
+                                                                            删除
+                                                                        </Button>
+                                                                    </Popconfirm>
+                                                                )}
+                                                            </Space>
+                                                        </div>
+
+                                                        {/* V2: 方法信息区 —— 名字下方左右分列展示 下发科室/检测员/截止/辅助员/结果 */}
+                                                        <div className="mt-2 pt-2 border-t border-slate-50 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px]">
+                                                            <div className="flex justify-between items-center gap-2 min-w-0">
+                                                                <span className="text-slate-400 shrink-0">下发科室</span>
+                                                                <span className="font-bold text-slate-700 truncate">{m.department_name || '—'}</span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center gap-2 min-w-0">
+                                                                <span className="text-slate-400 shrink-0">检测员</span>
+                                                                <span className="font-bold text-slate-700 truncate">
+                                                                    {m.tester_name
+                                                                        ? <><UserOutlined className="text-blue-500 mr-1" />{m.tester_name}</>
+                                                                        : '未指派'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center gap-2 min-w-0">
+                                                                <span className="text-slate-400 shrink-0">状态</span>
+                                                                <Tag color={MethodStatusMap[m.status]?.color} className="m-0 border-none text-[10px] font-bold uppercase px-2">
+                                                                    {MethodStatusMap[m.status]?.label || "未知状态"}
+                                                                </Tag>
+                                                            </div>
+                                                            <div className="flex justify-between items-center gap-2 min-w-0">
+                                                                <span className="text-slate-400 shrink-0">截止日期</span>
+                                                                <span className="font-bold text-slate-700">
+                                                                    {m.test_deadline
+                                                                        ? <><CalendarOutlined className="text-amber-500 mr-1" />{m.test_deadline}</>
+                                                                        : '—'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="col-span-2 flex items-start gap-2 min-w-0">
+                                                                <span className="text-slate-400 shrink-0">辅助员</span>
+                                                                <div className="flex flex-wrap gap-1 justify-end flex-1">
+                                                                    {m.helpers?.length > 0 ? m.helpers.map(h => {
+                                                                        const statusCfg = {
+                                                                            0: { label: "待确认", color: "default" },
+                                                                            1: { label: "已接受", color: "success" },
+                                                                            2: { label: "已拒绝", color: "error" },
+                                                                        }[h.status] || { label: "待确认", color: "default" };
+                                                                        return (
+                                                                            <Tooltip key={h.user_id || h.id} title={statusCfg.label}>
+                                                                                <Tag icon={<TeamOutlined />} color={statusCfg.color} className="m-0 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                                                                    {h.nickname || h.name}
+                                                                                </Tag>
+                                                                            </Tooltip>
+                                                                        );
+                                                                    }) : <span className="text-slate-300 italic">未分配</span>}
+                                                                </div>
+                                                            </div>
+                                                            <div className="col-span-2 flex items-start gap-2 min-w-0">
+                                                                <span className="text-slate-400 shrink-0">结果</span>
+                                                                <div className="flex flex-wrap gap-1 justify-end flex-1">
+                                                                    {m.results?.length > 0 ? m.results.map((r, i) => {
+                                                                        const valStr = String(r.value || '');
+                                                                        const displayVal = valStr.length > 10 ? valStr.substring(0, 10) + '...' : valStr;
+                                                                        const tag = (
+                                                                            <Tag key={r.field_id || r.id || i} color="cyan" className="m-0 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                                                                {r.name}: {displayVal}
+                                                                            </Tag>
+                                                                        );
+                                                                        return valStr.length > 10 ? (
+                                                                            <Tooltip key={r.field_id || r.id || i} title={valStr}>
+                                                                                {tag}
+                                                                            </Tooltip>
+                                                                        ) : tag;
+                                                                    }) : <span className="text-slate-300 italic">暂无</span>}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="py-10 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center">
+                                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="text-slate-400 text-xs">待分派检测方法</span>} />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         )
                     },
@@ -907,18 +1020,14 @@ const DetailDrawer = ({
                 onSave={handleItemAdd} 
             />
 
-            <ItemConfigModal 
+            {/* V2: 配置弹窗改为样品级方法分派（加工配置已移除，加工任务在方法卡片上单独添加） */}
+            <ItemConfigModal
                 visible={configModalVisible}
                 onClose={() => setConfigModalVisible(false)}
-                itemName={activeItemName}
-                itemId={activeItemId}
-                itemData={activeItemData}
-                onSaveProcess={handleProcessSave}
-                onDeleteProcess={handleProcessDelete}
+                sampleData={sampleData}
                 onSaveMethod={handleMethodSave}
                 onDeleteMethod={handleMethodDelete}
                 disabled={!isEditable}
-                hideProcessing={hideProcessing}
             />
 
             <Modal
@@ -940,7 +1049,7 @@ const DetailDrawer = ({
                 <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
                     <div className="text-xs text-blue-800">
                         <p className="font-bold mb-1">正在下发：</p>
-                        <p>检测项目：{selectedDistData?.item?.name || selectedDistData?.item?.item_name}</p>
+                        {/* V2: 方法上提到样品级，不再展示所属检测项目 */}
                         <p>检测方法：{selectedDistData?.method?.method_name || selectedDistData?.method?.name}</p>
                     </div>
                 </div>
@@ -989,7 +1098,7 @@ const DetailDrawer = ({
                 <div className="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-100">
                     <div className="text-xs text-purple-800">
                         <p className="font-bold mb-1">主检测员：{selectedHelperData?.method?.tester_name || '未指派'}</p>
-                        <p>检测项目：{selectedHelperData?.item?.name || selectedHelperData?.item?.item_name}</p>
+                        {/* V2: 方法上提到样品级，不再展示所属检测项目 */}
                         <p>检测方法：{selectedHelperData?.method?.method_name || selectedHelperData?.method?.name}</p>
                     </div>
                 </div>
@@ -1011,6 +1120,46 @@ const DetailDrawer = ({
                     </Form.Item>
                 </Form>
             </Modal>
+
+            {/* 加工任务弹窗 */}
+            <Modal
+                title={
+                    <div className="flex items-center gap-2">
+                        <ToolOutlined className="text-orange-500" />
+                        <span>配置加工任务</span>
+                    </div>
+                }
+                open={procTaskVisible}
+                onCancel={() => setProcTaskVisible(false)}
+                onOk={handleProcTaskSubmit}
+                confirmLoading={procTaskLoading}
+                okText="确定"
+                cancelText="取消"
+                width={600}
+                destroyOnClose
+            >
+                {procTaskOptionsLoading ? (
+                    <div className="py-10 text-center"><Spin /></div>
+                ) : (
+                    <div className="space-y-4 pt-2">
+                        <ProcessingOptionSelector
+                            value={procTaskOptionIds}
+                            onChange={setProcTaskOptionIds}
+                            suggestedOptions={suggestedProcOptions}
+                            allOptions={allProcOptions}
+                        />
+                        <div>
+                            <div className="text-sm font-bold text-slate-700 mb-2">完成期限</div>
+                            <DatePicker
+                                className="w-full rounded-xl"
+                                value={procTaskDeadline}
+                                onChange={setProcTaskDeadline}
+                                disabledDate={current => current && current < dayjs().startOf('day')}
+                            />
+                        </div>
+                    </div>
+                )}
+            </Modal>
             <ResultEntryModal 
                 open={resultEntryVisible}
                 onCancel={() => setResultEntryVisible(false)}
@@ -1021,7 +1170,6 @@ const DetailDrawer = ({
                 methodId={activeMethodData?.method_id || activeMethodData?.id}
                 methodName={activeMethodData?.method_name || activeMethodData?.name}
                 methodData={activeMethodData}
-                itemId={activeItemId}
                 sampleData={sampleData}
                 readOnly={activeMethodData?.status >= 3 || distributeType === 'department'}
             />

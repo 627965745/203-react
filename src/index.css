@@ -54,13 +54,16 @@ body {
   scrollbar-width: none;
 }
 
-/* Fix Cascader Menu Height */
+/* V2: 全局放开 Cascader 下拉面板高度。
+   antd v6 默认把 .ant-cascader-menu 固定为 180px（约 5~6 行），导致下拉框很矮。
+   改为按内容自适应高度，并限制最大高度约 12 行（≥10 行）；选项少于该高度时自动变矮、超出则滚动。 */
+.ant-cascader-menu {
+  height: auto !important;
+  max-height: 390px !important;
+}
+
+/* 兼容旧的 .large-cascader 用法（继续沿用，值与全局保持一致） */
 .large-cascader .ant-cascader-menu {
   max-height: 390px !important;
   height: auto !important;
-}
-
-.large-cascader .ant-cascader-menu-list {
-  height: auto !important;
-  max-height: 390px !important;
 }

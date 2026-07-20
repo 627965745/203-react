@@ -9,6 +9,7 @@ import {
     message,
     Dropdown,
     ConfigProvider,
+    Empty,
 } from "antd";
 import { UserOutlined, LockOutlined, LogoutOutlined } from "@ant-design/icons";
 import * as AntdIcons from "@ant-design/icons";
@@ -19,6 +20,17 @@ import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 
 dayjs.locale("zh-cn");
+
+// V2: 全局下拉框空状态文案 —— Select/Cascader/TreeSelect 无数据时显示“无数据”，
+//     其它组件（如表格）返回 undefined 走 antd 默认空状态。
+const renderDropdownEmpty = (componentName) =>
+    ["Select", "Cascader", "TreeSelect"].includes(componentName) ? (
+        <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="无数据"
+            style={{ margin: "8px 0" }}
+        />
+    ) : undefined;
 
 const { Header, Content } = AntLayout;
 
@@ -38,6 +50,7 @@ const AdminAppLayout = () => {
                     <ConfigProvider
                         locale={zhCN}
                         theme={{ algorithm: theme.compactAlgorithm }}
+                        renderEmpty={renderDropdownEmpty}
                     >
                         <Outlet />
                     </ConfigProvider>
@@ -129,6 +142,9 @@ const AdminAppLayout = () => {
     }, [selectedKey, navigate, user?.menu]);
 
     return (
+        // V2: 认证区域此前没有 ConfigProvider，下拉框空态回退到 antd 英文 "No Data"。
+        //     统一包一层，使所有下拉框空态显示“无数据”。
+        <ConfigProvider renderEmpty={renderDropdownEmpty}>
         <AntLayout className="min-h-screen" >
             <Header className="flex items-center justify-between sticky top-0" style={{ zIndex: 1000, background: "#DAEBFD", paddingLeft: 36, paddingRight: 24 }}>
                 <div className="flex items-center flex-1">
@@ -138,7 +154,7 @@ const AdminAppLayout = () => {
                     <Menu
                         style={{ background: "#DAEBFD" }}
                         mode="horizontal"
-                        selectedKeys={selectedKey === '' ? ['home'] : (selectedKey === 'fileshare' ? ['fileshare'] : [])}
+                        selectedKeys={selectedKey === '' ? ['home'] : (['fileshare', 'workloadCommon'].includes(selectedKey) ? [selectedKey] : [])}
                         className="flex-1 min-w-0"
                         items={[
                             {
@@ -156,6 +172,14 @@ const AdminAppLayout = () => {
                                     navigate('/fileshare');
                                 },
                                 label: "文件库",
+                            },
+                            {
+                                key: "workloadCommon",
+                                onClick: () => {
+                                    setSelectedKey('workloadCommon');
+                                    navigate('/workloadCommon');
+                                },
+                                label: "工作量",
                             },
                         ]}
                     />
@@ -209,6 +233,7 @@ const AdminAppLayout = () => {
                 </Content>
             </AntLayout>
         </AntLayout>
+        </ConfigProvider>
     );
 };
 

@@ -11,7 +11,6 @@ const DownloadTemplateModal = ({ open, onCancel, taskId, taskLabCode }) => {
 
     const scope = Form.useWatch("scope", form);
     const selectedSampleIds = Form.useWatch("sample_ids", form);
-    const selectedItemId = Form.useWatch("item_id", form);
 
     useEffect(() => {
         if (open && taskId) {
@@ -23,20 +22,13 @@ const DownloadTemplateModal = ({ open, onCancel, taskId, taskLabCode }) => {
         }
     }, [open, taskId]);
 
-    // Reset item and method when scope or selected sample IDs change
+    // V2: 方法上提到样品级，模板不再按检测项目，只按方法选择
+    // Reset method when scope or selected sample IDs change
     useEffect(() => {
         form.setFieldsValue({
-            item_id: null,
             method_id: null
         });
     }, [scope, selectedSampleIds, form]);
-
-    // Reset method when selected item changes
-    useEffect(() => {
-        form.setFieldsValue({
-            method_id: null
-        });
-    }, [selectedItemId, form]);
 
     const fetchInitialData = async () => {
         setLoading(true);
@@ -64,49 +56,24 @@ const DownloadTemplateModal = ({ open, onCancel, taskId, taskLabCode }) => {
         return [];
     }, [scope, samples, selectedSampleIds]);
 
-    // Extract unique items and their methods from active samples
-    const availableItems = useMemo(() => {
-        const itemMap = new Map();
+    // V2: 直接从样品的 methods（样品级）提取可选方法，不再经过检测项目
+    const availableMethods = useMemo(() => {
+        const methodMap = new Map();
         activeSamples.forEach((s) => {
-            (s.items || []).forEach((item) => {
-                const itemId = item.item_id || item.id;
-                const itemName = item.item_name || item.name;
-                if (!itemId) return;
-                if (!itemMap.has(itemId)) {
-                    itemMap.set(itemId, {
-                        value: itemId,
-                        label: itemName,
-                        methodsMap: new Map()
+            (s.methods || []).forEach((m) => {
+                const methodId = m.method_id || m.id;
+                const methodName = m.method_name || m.name;
+                if (!methodId) return;
+                if (!methodMap.has(methodId)) {
+                    methodMap.set(methodId, {
+                        value: methodId,
+                        label: methodName
                     });
                 }
-                const itemObj = itemMap.get(itemId);
-                (item.methods || []).forEach((m) => {
-                    const methodId = m.method_id || m.id;
-                    const methodName = m.method_name || m.name;
-                    if (!methodId) return;
-                    if (!itemObj.methodsMap.has(methodId)) {
-                        itemObj.methodsMap.set(methodId, {
-                            value: methodId,
-                            label: methodName
-                        });
-                    }
-                });
             });
         });
-
-        return Array.from(itemMap.values()).map((item) => ({
-            value: item.value,
-            label: item.label,
-            methods: Array.from(item.methodsMap.values())
-        }));
+        return Array.from(methodMap.values());
     }, [activeSamples]);
-
-    // Filter methods based on selected item
-    const availableMethods = useMemo(() => {
-        if (!selectedItemId) return [];
-        const item = availableItems.find((i) => i.value === selectedItemId);
-        return item ? item.methods : [];
-    }, [selectedItemId, availableItems]);
 
     const handleDownload = async () => {
         try {
@@ -114,7 +81,7 @@ const DownloadTemplateModal = ({ open, onCancel, taskId, taskLabCode }) => {
             setDownloading(true);
 
             const payload = {
-                item_id: values.item_id,
+                // V2: 移除 item_id，仅传 method_id
                 method_id: values.method_id,
                 task_id: values.scope === "task" ? taskId : null,
                 sample_ids: values.scope === "samples" ? values.sample_ids : null
@@ -196,9 +163,6 @@ const DownloadTemplateModal = ({ open, onCancel, taskId, taskLabCode }) => {
                     </div>
                     <div>
                         <div className="text-lg font-black text-slate-800">下载结果录入模板</div>
-                        <div className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">
-                            Download Result Template
-                        </div>
                     </div>
                 </div>
             }
@@ -253,32 +217,17 @@ const DownloadTemplateModal = ({ open, onCancel, taskId, taskLabCode }) => {
                         </Form.Item>
                     )}
 
-                    <Form.Item
-                        name="item_id"
-                        label={<span className="font-black text-slate-700">检测项目</span>}
-                        rules={[{ required: true, message: "请选择检测项目" }]}
-                    >
-                        <Select
-                            placeholder={scope === "samples" && (!selectedSampleIds || selectedSampleIds.length === 0) ? "请先选择样品" : "请选择检测项目"}
-                            showSearch
-                            optionFilterProp="label"
-                            className="w-full rounded-xl"
-                            disabled={scope === "samples" && (!selectedSampleIds || selectedSampleIds.length === 0)}
-                            options={availableItems.map((item) => ({
-                                label: item.label,
-                                value: item.value
-                            }))}
-                        />
-                    </Form.Item>
-
+                    {/* V2: 移除“检测项目”选择，方法上提到样品级直接选择 */}
                     <Form.Item
                         name="method_id"
                         label={<span className="font-black text-slate-700">检测方法</span>}
                         rules={[{ required: true, message: "请选择检测方法" }]}
                     >
                         <Select
-                            placeholder={selectedItemId ? "请选择检测方法" : "请先选择检测项目"}
-                            disabled={!selectedItemId}
+                            placeholder={scope === "samples" && (!selectedSampleIds || selectedSampleIds.length === 0) ? "请先选择样品" : "请选择检测方法"}
+                            showSearch
+                            optionFilterProp="label"
+                            disabled={scope === "samples" && (!selectedSampleIds || selectedSampleIds.length === 0)}
                             className="w-full rounded-xl"
                             options={availableMethods.map((m) => ({
                                 label: m.label,

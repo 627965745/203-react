@@ -1,37 +1,56 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Table, Button, Input, Space, Tag, Modal, message, Tabs, Card } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, SearchOutlined } from '@ant-design/icons';
-import { 
-  readSampleHelper, 
-  approveSampleHelper, 
-  batchApproveSampleHelper, 
-  rejectSampleHelper, 
-  batchRejectSampleHelper 
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Table, Button, Input, Space, Tag, Modal, message, Tabs, Layout, Spin, Empty } from 'antd';
+import {
+  CheckCircleOutlined, CloseCircleOutlined,
+  LeftOutlined, RightOutlined, TeamOutlined, InboxOutlined,
+} from '@ant-design/icons';
+import {
+  readSampleHelper,
+  approveSampleHelper,
+  batchApproveSampleHelper,
+  rejectSampleHelper,
+  batchRejectSampleHelper,
 } from '../../../api/testing';
 
+const { Sider, Content } = Layout;
+
+// 布局参照 WorkflowManager/Sample：左侧任务列表，右侧展示辅助任务。
+//
+// 实测返回数据（SampleHelper/read）中 helpers[] 只有 method_id/method_name/status，
+// 不含 item_id/item_name，因此审批相关请求体也不再传 item_id。
+//
+// 左侧任务列表不再用 rows:500 一次性反推全部任务 —— 接口本身自带分页且返回 total，
+// 直接按正常页大小（10）翻页展示当前页样品里出现的任务即可。同时新增“全部任务”
+// 按钮：选中后右侧不再传 task_ids，直接用接口自身分页展示全部辅助任务。
 const SampleHelper = () => {
+  // 左侧：任务列表（正常分页，非一次性拉取）
+  const [tasks, setTasks] = useState([]);
+  const [taskId, setTaskId] = useState(null);
+  const [viewAll, setViewAll] = useState(true); // 默认“全部任务”，无需选中具体任务即可查看
+  const [taskLoading, setTaskLoading] = useState(false);
+  const [taskPage, setTaskPage] = useState(0);
+  const [taskTotal, setTaskTotal] = useState(0);
+  const taskPageSize = 10;
+
+  // 右侧：辅助任务列表
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState([]);
   const [total, setTotal] = useState(0);
-  const [activeTab, setActiveTab] = useState('0'); // '0' for pending, '1' for approved
-  const [queryParams, setQueryParams] = useState({
-    query: '',
-    page: 1,
-    rows: 10,
-  });
+  const [activeTab, setActiveTab] = useState('0'); // '0' 待确认，'1' 已确认
+  const [queryParams, setQueryParams] = useState({ query: '', page: 1, rows: 10 });
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
-  const [tasks, setTasks] = useState([]);
-  const [selectedTaskIds, setSelectedTaskIds] = useState([]);
 
-  const fetchTasks = useCallback(async () => {
+  const selectedTask = tasks.find(t => t.id === taskId);
+
+  useEffect(() => {
+    fetchTasks();
+  }, [taskPage]);
+
+  const fetchTasks = async () => {
+    setTaskLoading(true);
     try {
-      // Fetch a larger set to get unique tasks for filtering
-      const res = await readSampleHelper({ 
-        page: 0, 
-        rows: 500, 
-        status: null,
-        task_ids: [], // Always include task_ids
-      });
+      // 正常分页拉取样品，取当前页出现的任务去重展示；total 直接用接口返回值
+      const res = await readSampleHelper({ page: taskPage, rows: taskPageSize, status: null });
       if (res.data?.status === 0) {
         const rawRows = res.data.data.rows || [];
         const taskMap = new Map();
@@ -40,32 +59,39 @@ const SampleHelper = () => {
             taskMap.set(sample.task_id, {
               id: sample.task_id,
               lab_code: sample.task_lab_code,
-              name: sample.task_name
+              name: sample.task_name,
             });
           }
         });
         setTasks(Array.from(taskMap.values()));
+        setTaskTotal(res.data.data.total || 0);
       }
     } catch (error) {
-      console.error('获取任务过滤列表失败', error);
+      message.error('加载任务列表失败');
+    } finally {
+      setTaskLoading(false);
     }
-  }, []);
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await readSampleHelper({
-        ...queryParams,
+      const params = {
         status: activeTab === 'all' ? null : parseInt(activeTab),
+        query: queryParams.query,
         page: queryParams.page - 1,
-        task_ids: selectedTaskIds, // Always include task_ids
-      });
+        rows: queryParams.rows,
+      };
+      // “全部任务”模式下不传 task_ids，交由接口自身分页返回全部辅助任务
+      if (!viewAll && taskId) {
+        params.task_ids = [taskId];
+      }
+      const response = await readSampleHelper(params);
       if (response.data?.status === 0) {
         const rawRows = response.data.data.rows || [];
-        // Process rows to filter helpers by status if needed
         const processedRows = rawRows.map(sample => ({
           ...sample,
-          filteredHelpers: (sample.helpers || []).filter(helper => 
+          filteredHelpers: (sample.helpers || []).filter(helper =>
             activeTab === 'all' || helper.status === parseInt(activeTab)
           )
         })).filter(sample => sample.filteredHelpers.length > 0);
@@ -80,40 +106,59 @@ const SampleHelper = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, queryParams, selectedTaskIds]);
-
-  useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
+  }, [viewAll, taskId, activeTab, queryParams]);
 
   useEffect(() => {
     fetchData();
+    setSelectedRowKeys([]);
   }, [fetchData]);
 
-  const handleTaskToggle = (taskId) => {
-    const nextSelectedIds = selectedTaskIds.includes(taskId)
-      ? selectedTaskIds.filter(id => id !== taskId)
-      : [...selectedTaskIds, taskId];
-    setSelectedTaskIds(nextSelectedIds);
-    setQueryParams(prev => ({ ...prev, page: 1 }));
+  const handleSelectTask = (id) => {
+    if (!viewAll && id === taskId) return;
+    setViewAll(false);
+    setTaskId(id);
+    setActiveTab('0');
+    setQueryParams({ query: '', page: 1, rows: 10 });
   };
 
-  const handleAllTasks = () => {
-    setSelectedTaskIds([]);
-    setQueryParams(prev => ({ ...prev, page: 1 }));
+  const handleSelectAll = () => {
+    if (viewAll) return;
+    setViewAll(true);
+    setTaskId(null);
+    setActiveTab('0');
+    setQueryParams({ query: '', page: 1, rows: 10 });
   };
 
-  const handleApprove = (record, sampleId) => {
+  // 展平为“一行一条辅助任务”，不再按样品展开
+  const flatRows = useMemo(() => {
+    const rows = [];
+    data.forEach(sample => {
+      sample.filteredHelpers.forEach(h => {
+        rows.push({
+          key: `${sample.id}-${h.method_id}`,
+          sampleId: sample.id,
+          lab_code: sample.lab_code,
+          task_lab_code: sample.task_lab_code || selectedTask?.lab_code,
+          method_id: h.method_id,
+          method_name: h.method_name,
+          status: h.status,
+          updated_at: h.updated_at,
+        });
+      });
+    });
+    return rows;
+  }, [data, selectedTask]);
+
+  const handleApprove = (record) => {
     Modal.confirm({
       title: '确认辅助任务',
-      content: `是否确认样品 ${record.lab_code || ''} 的 [${record.item_name}] 辅助任务？`,
+      content: `是否确认样品 ${record.task_lab_code}-${record.lab_code?.toString().padStart(4, '0')} 的 [${record.method_name}] 辅助任务？`,
       okText: '确认',
       cancelText: '取消',
       onOk: async () => {
         try {
           const res = await approveSampleHelper({
-            sample_id: sampleId,
-            item_id: record.item_id,
+            sample_id: record.sampleId,
             method_id: record.method_id,
           });
           if (res.data?.status === 0) {
@@ -129,51 +174,17 @@ const SampleHelper = () => {
     });
   };
 
-  const handleBatchApprove = () => {
-    if (selectedRowKeys.length === 0) {
-      message.warning('请选择要确认的任务');
-      return;
-    }
-    
-    // Extract unique sample_ids from the selected assignment keys (format: sampleId-itemId-methodId)
-    const selectedSampleIds = [...new Set(selectedRowKeys.map(key => parseInt(key.split('-')[0])))];
-
-    Modal.confirm({
-      title: '批量确认辅助任务',
-      content: `是否确认选中的 ${selectedRowKeys.length} 个项目所属的样品任务？`,
-      okText: '确认',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          const res = await batchApproveSampleHelper({
-            sample_ids: selectedSampleIds,
-          });
-          if (res.data?.status === 0) {
-            message.success('批量确认成功');
-            setSelectedRowKeys([]);
-            fetchData();
-          } else {
-            message.error(res.data?.message || '批量确认失败');
-          }
-        } catch (error) {
-          message.error('批量操作异常');
-        }
-      },
-    });
-  };
-
-  const handleReject = (record, sampleId) => {
+  const handleReject = (record) => {
     Modal.confirm({
       title: '拒绝辅助任务',
-      content: `是否拒绝样品 ${record.lab_code || ''} 的 [${record.item_name}] 辅助任务？`,
+      content: `是否拒绝样品 ${record.task_lab_code}-${record.lab_code?.toString().padStart(4, '0')} 的 [${record.method_name}] 辅助任务？`,
       okText: '确认',
       cancelText: '取消',
       okType: 'danger',
       onOk: async () => {
         try {
           const res = await rejectSampleHelper({
-            sample_id: sampleId,
-            item_id: record.item_id,
+            sample_id: record.sampleId,
             method_id: record.method_id,
           });
           if (res.data?.status === 0) {
@@ -189,25 +200,49 @@ const SampleHelper = () => {
     });
   };
 
+  const handleBatchApprove = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请选择要确认的任务');
+      return;
+    }
+    const selectedSampleIds = [...new Set(selectedRowKeys.map(key => parseInt(key.split('-')[0])))];
+    Modal.confirm({
+      title: '批量确认辅助任务',
+      content: `是否确认选中的 ${selectedRowKeys.length} 条辅助任务？`,
+      okText: '确认',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          const res = await batchApproveSampleHelper({ sample_ids: selectedSampleIds });
+          if (res.data?.status === 0) {
+            message.success('批量确认成功');
+            setSelectedRowKeys([]);
+            fetchData();
+          } else {
+            message.error(res.data?.message || '批量确认失败');
+          }
+        } catch (error) {
+          message.error('批量操作异常');
+        }
+      },
+    });
+  };
+
   const handleBatchReject = () => {
     if (selectedRowKeys.length === 0) {
       message.warning('请选择要拒绝的任务');
       return;
     }
-
     const selectedSampleIds = [...new Set(selectedRowKeys.map(key => parseInt(key.split('-')[0])))];
-
     Modal.confirm({
       title: '批量拒绝辅助任务',
-      content: `是否拒绝选中的 ${selectedRowKeys.length} 个项目所属的样品任务？`,
+      content: `是否拒绝选中的 ${selectedRowKeys.length} 条辅助任务？`,
       okText: '确认',
       cancelText: '取消',
       okType: 'danger',
       onOk: async () => {
         try {
-          const res = await batchRejectSampleHelper({
-            sample_ids: selectedSampleIds,
-          });
+          const res = await batchRejectSampleHelper({ sample_ids: selectedSampleIds });
           if (res.data?.status === 0) {
             message.success('批量拒绝成功');
             setSelectedRowKeys([]);
@@ -224,283 +259,208 @@ const SampleHelper = () => {
 
   const columns = [
     {
-      title: '任务名称',
-      dataIndex: 'task_name',
-      key: 'task_name',
-      render: (text) => <span className="font-bold text-gray-700">{text}</span>
-    },
-    {
-      title: '任务编号',
-      dataIndex: 'task_lab_code',
-      key: 'task_lab_code',
-      render: (text) => <Tag color="blue" className="font-mono">{text}</Tag>
-    },
-    {
       title: '样品编号',
       dataIndex: 'lab_code',
       key: 'lab_code',
-      render: (text, record) => <span className="font-bold text-blue-600 font-mono">{record.task_lab_code}-{text?.toString().padStart(4, '0')}</span>
+      width: 140,
+      render: (text, record) => (
+        <span className="font-bold text-blue-600 font-mono text-xs">
+          {record.task_lab_code}-{text?.toString().padStart(4, '0')}
+        </span>
+      ),
+    },
+    {
+      title: '检测方法',
+      dataIndex: 'method_name',
+      key: 'method_name',
+      render: (text) => <span className="text-sm font-medium text-slate-700">{text}</span>,
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      width: 90,
+      render: (status) => (
+        status === 1
+          ? <Tag color="green" className="m-0">已确认</Tag>
+          : <Tag color="gold" className="m-0">待确认</Tag>
+      ),
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      key: 'updated_at',
+      width: 160,
+      render: (t) => <span className="text-[11px] font-mono text-slate-400">{t || '-'}</span>,
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 130,
+      render: (_, record) => (
+        record.status === 0 ? (
+          <Space size="small">
+            <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleApprove(record)}>
+              确认
+            </Button>
+            <Button type="link" size="small" danger icon={<CloseCircleOutlined />} onClick={() => handleReject(record)}>
+              拒绝
+            </Button>
+          </Space>
+        ) : <span className="text-slate-300 text-xs">-</span>
+      ),
     },
   ];
 
-  const expandedRowRender = (sample) => {
-    const helperColumns = [
-      { 
-        title: '检测项目', 
-        dataIndex: 'item_name', 
-        key: 'item_name',
-        render: (text) => <span className="font-medium">{text}</span>
-      },
-      { 
-        title: '检测方法', 
-        dataIndex: 'method_name', 
-        key: 'method_name',
-        render: (text) => <span className="text-gray-500 text-xs">{text}</span>
-      },
-      {
-        title: '状态',
-        dataIndex: 'status',
-        key: 'status',
-        width: 100,
-        render: (status) => (
-          status === 1 ? <Tag color="green">已确认</Tag> : <Tag color="gold">待确认</Tag>
-        ),
-      },
-      {
-        title: '操作',
-        key: 'action',
-        width: 150,
-        render: (_, helper) => (
-          <Space size="small">
-            {helper.status === 0 && (
-              <>
-                <Button 
-                  type="link" 
-                  size="small"
-                  icon={<CheckCircleOutlined />} 
-                  onClick={() => handleApprove(helper, sample.id)}
-                >
-                  确认
-                </Button>
-                <Button 
-                  type="link" 
-                  size="small"
-                  danger 
-                  icon={<CloseCircleOutlined />} 
-                  onClick={() => handleReject(helper, sample.id)}
-                >
-                  拒绝
-                </Button>
-              </>
-            )}
-          </Space>
-        ),
-      },
-    ];
-
-    const innerRowSelection = activeTab === '0' ? {
-      selectedRowKeys,
-      hideSelectAll: true, // Hide Select All in inner table as requested
-      onChange: (newKeys) => {
-        // Only update keys belonging to this sample in this context
-        const thisSamplePrefix = `${sample.id}-`;
-        const otherSampleKeys = selectedRowKeys.filter(k => !k.startsWith(thisSamplePrefix));
-        const currentSampleKeys = newKeys.filter(k => k.startsWith(thisSamplePrefix));
-        setSelectedRowKeys([...otherSampleKeys, ...currentSampleKeys]);
-      },
-    } : null;
-
-    return (
-      <div className="mx-4 my-2">
-        <h4 className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">辅助检测项明细</h4>
-        <Table
-          rowKey={(record) => `${sample.id}-${record.item_id}-${record.method_id}`}
-          columns={helperColumns}
-          dataSource={sample.filteredHelpers}
-          pagination={false}
-          size="small"
-          rowSelection={innerRowSelection}
-          className="bg-white rounded-md overflow-hidden"
-        />
-      </div>
-    );
-  };
-
-  const onSelectChange = (newSelectedRowKeys) => {
-    setSelectedRowKeys(newSelectedRowKeys);
-  };
-
-  // Main table selection logic: Selecting a sample selects all its filtered helpers
-  const mainRowSelection = activeTab === '0' ? {
-    selectedRowKeys: data.filter(sample => 
-      sample.filteredHelpers.every(h => 
-        selectedRowKeys.includes(`${sample.id}-${h.item_id}-${h.method_id}`)
-      ) && sample.filteredHelpers.length > 0
-    ).map(s => s.id),
-    onSelect: (record, selected) => {
-      const helperKeys = record.filteredHelpers.map(h => `${record.id}-${h.item_id}-${h.method_id}`);
-      let nextKeys = [...selectedRowKeys];
-      if (selected) {
-        nextKeys = [...new Set([...nextKeys, ...helperKeys])];
-      } else {
-        nextKeys = nextKeys.filter(k => !helperKeys.includes(k));
-      }
-      setSelectedRowKeys(nextKeys);
-    },
-    onSelectAll: (selected, selectedRows, changeRows) => {
-      let nextKeys = [...selectedRowKeys];
-      data.forEach(record => {
-        const helperKeys = record.filteredHelpers.map(h => `${record.id}-${h.item_id}-${h.method_id}`);
-        if (selected) {
-          nextKeys = [...new Set([...nextKeys, ...helperKeys])];
-        } else {
-          nextKeys = nextKeys.filter(k => !helperKeys.includes(k));
-        }
-      });
-      setSelectedRowKeys(nextKeys);
-    },
-    getCheckboxProps: (record) => {
-      const allSelected = record.filteredHelpers.every(h => 
-        selectedRowKeys.includes(`${record.id}-${h.item_id}-${h.method_id}`)
-      ) && record.filteredHelpers.length > 0;
-      
-      const someSelected = record.filteredHelpers.some(h => 
-        selectedRowKeys.includes(`${record.id}-${h.item_id}-${h.method_id}`)
-      );
-
-      return {
-        indeterminate: someSelected && !allSelected,
-      };
-    },
+  const rowSelection = activeTab === '0' ? {
+    selectedRowKeys,
+    onChange: setSelectedRowKeys,
   } : null;
 
   return (
-    <div className="pl-6">
-      <Card title="辅助检测管理" className="overflow-hidden">
-        {/* Task Filter Section */}
-        <div className="bg-gray-50/50 p-2 border-b border-gray-100">
-          <div className="flex items-center">
-            <div className="flex flex-col mr-8">
-              <span className="text-sm font-bold text-gray-800 leading-none">筛选任务</span>
-              <span className="text-xs text-gray-400 mt-1 font-medium">(多选模式)</span>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-4 flex-1">
-              {/* All Tasks Button */}
-              <button
-                onClick={handleAllTasks}
-                className={`h-10 px-4 rounded-xl font-bold text-sm transition-all duration-200 border-2 ${
-                  selectedTaskIds.length === 0
-                  ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100 scale-105'
-                  : 'bg-white border-gray-200 text-gray-500 hover:border-blue-400 hover:text-blue-500'
-                }`}
-              >
-                全部任务
-              </button>
+    <Layout className="bg-white h-[calc(100vh-120px)] overflow-hidden helper-center-layout">
+      <style>{`
+        .helper-center-layout { background: #fff; }
+        .helper-center-layout .ant-layout-sider { background: #fff; }
+        .helper-center-layout .task-list-item:hover { background: #f1f5f9; }
+        .helper-center-layout .task-list-item.active {
+          background: #f1f5f9;
+          color: #2563eb;
+          border-right: 4px solid #2563eb;
+        }
+        .helper-center-layout .ant-spin-nested-loading,
+        .helper-center-layout .ant-spin-container {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+      `}</style>
 
-              <div className="w-px h-8 bg-gray-200 mx-2" />
-
-              {/* Task Tags Container */}
-              <div className="flex flex-wrap gap-3 overflow-x-auto custom-scrollbar pb-1">
-                {tasks.map(task => {
-                  const isActive = selectedTaskIds.includes(task.id);
-                  return (
-                    <div
-                      key={task.id}
-                      onClick={() => handleTaskToggle(task.id)}
-                      className={`
-                        h-14 min-w-[140px] px-5 rounded-xl cursor-pointer
-                        flex flex-col justify-center items-center
-                        transition-all duration-200 border-2 select-none
-                        ${isActive 
-                          ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-sm' 
-                          : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:bg-blue-50/30'
-                        }
-                      `}
-                    >
-                      <span className="text-[12px] font-mono font-bold opacity-60 uppercase tracking-wider mb-0.5">
-                        {task.lab_code}
-                      </span>
-                      <span className="text-[15px] font-bold truncate max-w-[180px]">
-                        {task.name}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+      <Sider width={280} theme="light" className="border-r border-gray-100 h-full flex flex-col">
+        <div className="p-3 flex flex-col h-full bg-white">
+          <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-50 flex-shrink-0">
+            <span className="text-gray-600 font-black uppercase tracking-widest text-base">任务列表</span>
           </div>
+
+          <div className="text-xs text-gray-400 font-bold mb-2 px-1 uppercase tracking-widest flex items-center gap-2 flex-shrink-0">
+            <TeamOutlined /> 我的辅助任务
+          </div>
+
+          {/* “全部任务”按钮：选中后右侧不再传 task_ids，直接展示全部辅助任务 */}
+          <div
+            className={`px-3 py-2 mb-2 rounded-lg cursor-pointer transition-all task-list-item flex-shrink-0 ${viewAll ? "active font-bold" : "text-gray-600"}`}
+            onClick={handleSelectAll}
+          >
+            <span className="text-sm font-bold flex items-center gap-1.5">
+              <TeamOutlined /> 全部任务
+            </span>
+          </div>
+
+          <Spin
+            spinning={taskLoading && tasks.length === 0}
+            wrapperClassName="flex-1 flex flex-col overflow-hidden"
+            description="加载任务..."
+          >
+            <div className="overflow-y-auto flex-1 pr-2 custom-scrollbar">
+              {tasks.map((item) => (
+                <div
+                  key={item.id}
+                  className={`px-3 py-2 mb-1.5 rounded-lg cursor-pointer transition-all task-list-item ${!viewAll && taskId === item.id ? "active font-bold" : "text-gray-600"}`}
+                  onClick={() => handleSelectTask(item.id)}
+                >
+                  <span className="text-sm truncate w-full font-bold text-slate-800 flex items-center gap-1.5">
+                    <Tag className="m-0 font-black text-[10px] bg-slate-100 border-none text-slate-500">#{item.id}</Tag>
+                    <span className="truncate">{item.lab_code}-{item.name || "未命名任务"}</span>
+                  </span>
+                </div>
+              ))}
+              {tasks.length === 0 && !taskLoading && (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无任务数据" />
+              )}
+            </div>
+
+            <div className="flex justify-center items-center gap-3 py-2 border-t border-slate-100 flex-shrink-0 mt-1">
+              <Button type="text" size="small" icon={<LeftOutlined />} disabled={taskPage === 0} onClick={() => setTaskPage(prev => prev - 1)} />
+              <span className="font-mono text-xs text-slate-600">
+                第 {taskPage + 1} / {Math.max(1, Math.ceil(taskTotal / taskPageSize))} 页
+              </span>
+              <Button type="text" size="small" icon={<RightOutlined />} disabled={(taskPage + 1) * taskPageSize >= taskTotal} onClick={() => setTaskPage(prev => prev + 1)} />
+            </div>
+          </Spin>
         </div>
+      </Sider>
 
-        <div className="pt-2">
-          <div className="flex justify-between mb-2">
-          <Space>
-            <Input
-              placeholder="输入关键词查询"
-              prefix={<SearchOutlined />}
-              value={queryParams.query}
-              onChange={(e) => setQueryParams({ ...queryParams, query: e.target.value, page: 1 })}
-              onPressEnter={fetchData}
-              className="w-72"
-            />
-            <Button type="primary" onClick={fetchData}>查询</Button>
-          </Space>
-          {activeTab === '0' && (
-            <Space>
-              <Button 
-                type="primary" 
-                disabled={selectedRowKeys.length === 0} 
-                onClick={handleBatchApprove}
-              >
-                批量确认
-              </Button>
-              <Button 
-                danger 
-                disabled={selectedRowKeys.length === 0} 
-                onClick={handleBatchReject}
-              >
-                批量拒绝
-              </Button>
-            </Space>
-          )}
-        </div>
+      <Content className="bg-white flex flex-col h-full overflow-hidden">
+            <div className="px-4 pt-3 flex-shrink-0">
+              <h1 className="text-xl font-black text-slate-800 m-0 tracking-tight flex items-center gap-2">
+                <InboxOutlined className="text-blue-600" />
+                {viewAll ? '全部任务' : `${selectedTask?.lab_code}-${selectedTask?.name}`}
+              </h1>
 
-        <Tabs
-          activeKey={activeTab}
-          onChange={(key) => {
-            setActiveTab(key);
-            setQueryParams({ ...queryParams, page: 1 });
-            setSelectedRowKeys([]);
-          }}
-          items={[
-            { key: '0', label: '待确认' },
-            { key: '1', label: '已确认' },
-          ]}
-        />
+              <div className="flex justify-between items-center mb-2 mt-2 min-h-[32px]">
+                <Input.Search
+                  placeholder="请输入关键词查询..."
+                  allowClear
+                  onSearch={(value) => setQueryParams(prev => ({ ...prev, query: value, page: 1 }))}
+                  style={{ width: 300 }}
+                  enterButton="搜索"
+                />
 
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={data}
-          loading={loading}
-          rowSelection={mainRowSelection}
-          expandable={{
-            expandedRowRender,
-            defaultExpandAllRows: false,
-          }}
-          pagination={{
-            current: queryParams.page,
-            pageSize: queryParams.rows,
-            total: total,
-            onChange: (page, rows) => setQueryParams({ ...queryParams, page, rows }),
-            showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 条数据`,
-          }}
-        />
-      </div>
-    </Card>
-  </div>
-);
+                <div className="flex-1" />
+
+                <Space wrap>
+                  {activeTab === '0' && (
+                    <>
+                      <Button type="primary" disabled={selectedRowKeys.length === 0} onClick={handleBatchApprove}>
+                        批量确认
+                      </Button>
+                      <Button danger disabled={selectedRowKeys.length === 0} onClick={handleBatchReject}>
+                        批量拒绝
+                      </Button>
+                    </>
+                  )}
+                </Space>
+              </div>
+
+              <Tabs
+                size="small"
+                activeKey={activeTab}
+                onChange={(key) => {
+                  setActiveTab(key);
+                  setQueryParams(prev => ({ ...prev, page: 1 }));
+                  setSelectedRowKeys([]);
+                }}
+                items={[
+                  { key: '0', label: '待确认' },
+                  { key: '1', label: '已确认' },
+                ]}
+              />
+            </div>
+
+            <div className="px-4 pb-4 flex-1 overflow-hidden">
+              <Table
+                size="middle"
+                rowKey="key"
+                columns={columns}
+                dataSource={flatRows}
+                loading={loading}
+                rowSelection={rowSelection}
+                pagination={{
+                  current: queryParams.page,
+                  pageSize: queryParams.rows,
+                  total,
+                  onChange: (page, rows) => setQueryParams({ ...queryParams, page, rows }),
+                  showSizeChanger: true,
+                  showTotal: (t) => `共 ${t} 个样品`,
+                }}
+              />
+            </div>
+      </Content>
+    </Layout>
+  );
 };
 
 export default SampleHelper;

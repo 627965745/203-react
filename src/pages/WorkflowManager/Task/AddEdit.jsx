@@ -209,26 +209,17 @@ const AddEdit = ({ record, onChange }) => {
                 </Col>
             </Row>
 
+            {/* V2: 移除“是否需要加工”—— 加工需求改由每个样品自行维护 processing_status */}
             <Row gutter={16}>
                 <Col span={12}>
                     <div className="mb-1 text-sm font-medium text-gray-700">来样方式 <span className="text-red-500">*</span></div>
-                    <Radio.Group 
-                        value={record.delivered_by} 
+                    <Radio.Group
+                        value={record.delivered_by}
                         onChange={(e) => updateField("delivered_by", e.target.value)}
                     >
                         <Radio value={0}>客户邮寄</Radio>
                         <Radio value={1}>客户送检</Radio>
                         <Radio value={2}>自采</Radio>
-                    </Radio.Group>
-                </Col>
-                <Col span={12}>
-                    <div className="mb-1 text-sm font-medium text-gray-700">是否需要加工 <span className="text-red-500">*</span></div>
-                    <Radio.Group 
-                        value={record.is_processing} 
-                        onChange={(e) => updateField("is_processing", e.target.value)}
-                    >
-                        <Radio value={1}>是</Radio>
-                        <Radio value={0}>否</Radio>
                     </Radio.Group>
                 </Col>
             </Row>

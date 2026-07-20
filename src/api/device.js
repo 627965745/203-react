@@ -6,3 +6,4 @@ export const updateDevice = data => instance.post("/DeviceAdmin/Device/update", 
 export const deleteDevice = data => instance.post("/DeviceAdmin/Device/delete", data);
 export const comboDevice = data => instance.post("/DeviceAdmin/Device/combo", data);
 export const calibrateDevice = data => instance.post("/DeviceAdmin/Device/calibrate", data);
+export const batchCalibrateDevice = data => instance.post("/DeviceAdmin/Device/batchCalibrate", data);

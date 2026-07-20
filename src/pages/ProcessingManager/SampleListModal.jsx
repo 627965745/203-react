@@ -33,14 +33,21 @@ const SampleTypeMap = {
     3: { label: "重复样", color: "orange" },
 };
 
+// V2: 加工状态上提到样品级（samples.processing_status）
+const ProcessingStatusMap = {
+    0: { label: "无需加工", color: "default" },
+    1: { label: "正在加工", color: "processing" },
+    2: { label: "加工完成", color: "success" },
+};
+
 const SampleListModal = ({ visible, task, onCancel }) => {
     const [refreshKey, setRefreshKey] = useState(0);
 
-    const handleApprove = async (sampleId, itemId) => {
+    // V2: 加工完成审批按样品直接进行，不再传 item_id
+    const handleApprove = async (sampleId) => {
         try {
             const res = await approveSampleProcessingManager({
                 sample_ids: [sampleId],
-                item_ids: [itemId],
             });
             if (res.data.status === 0) {
                 message.success("已标记加工完成");
@@ -175,136 +182,81 @@ const SampleListModal = ({ visible, task, onCancel }) => {
                     )}
                 </div>
 
-                {/* Processing Methods Section - Redesigned as List */}
+                {/* V2: 加工要求 —— 加工上提到样品级，不再遍历检测项目(items) */}
                 <div>
-                    <div className="flex items-center gap-2 mb-2 text-slate-700 font-bold">
-                        <DeploymentUnitOutlined className="text-indigo-500" />
-                        <span>加工方法</span>
-                    </div>
-                    {(record.items || []).length > 0 ? (
-                        <div className="space-y-2">
-                            {record.items.map((item, idx) => (
-                                <div
-                                    key={idx}
-                                    className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 text-slate-700 font-bold">
+                            <DeploymentUnitOutlined className="text-indigo-500" />
+                            <span>加工要求</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {(() => {
+                                const cfg = ProcessingStatusMap[record.processing_status] || ProcessingStatusMap[0];
+                                return (
+                                    <Tag color={cfg.color} bordered={false} className="m-0">
+                                        {record.processing_status === 2 && <CheckCircleOutlined className="mr-1" />}
+                                        {cfg.label}
+                                    </Tag>
+                                );
+                            })()}
+                            {/* V2: 完成加工按样品直接审批 */}
+                            {record.processing_status === 1 && (
+                                <Popconfirm
+                                    title="确认完成加工？"
+                                    description="请确保该样品的加工步骤已全部执行完毕。"
+                                    onConfirm={() => handleApprove(record.id)}
+                                    okText="确认"
+                                    cancelText="取消"
+                                    placement="left"
                                 >
-                                    <div className="bg-indigo-50/50 px-3 py-1.5 border-b border-indigo-100 flex justify-between items-center">
-                                        <div className="flex items-center gap-2">
-                                            <Tag
-                                                color="indigo"
-                                                className="m-0 border-none rounded-lg px-3 py-1 flex items-center"
-                                            >
-                                                <span
-                                                    className="font-black text-xl text-indigo-700"
-                                                    style={{ fontSize: "14px" }}
-                                                >
-                                                    {item.name}
-                                                </span>
-                                            </Tag>
-                                            <span className="text-[10px] text-indigo-300 font-mono">
-                                                #{item.id}
-                                            </span>
-                                        </div>
-                                        {item.processing_deadline && (
-                                            <div className="text-xs text-indigo-600 font-medium flex items-center gap-1">
-                                                <span className="text-slate-400">
-                                                    加工截止时间:
-                                                </span>
-                                                <span className="font-mono font-bold bg-indigo-100/50 px-2 py-0.5 rounded text-[11px] border border-indigo-100/30">
-                                                    {item.processing_deadline}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="p-2 px-3">
-                                        {(item.processing || []).length > 0 ? (
-                                            <div className="divide-y divide-slate-50">
-                                                {item.processing.map(
-                                                    (p, pIdx) => (
-                                                        <div
-                                                            key={pIdx}
-                                                            className="py-1 first:pt-0 last:pb-0 flex items-center text-sm"
-                                                        >
-                                                            <span className="text-slate-500 w-1/3">
-                                                                {p.method_name}
-                                                            </span>
-                                                            <div className="flex-1 text-center">
-                                                                <span className="font-bold text-slate-700 bg-slate-50 px-3 py-1 rounded border border-slate-100 min-w-[80px] inline-block shadow-sm">
-                                                                    {p.value}
-                                                                </span>
-                                                            </div>
-                                                            <div className="w-1/3 text-right">
-                                                                {pIdx === 0 && // Show only once per item to avoid redundancy
-                                                                    (item.processing_status ===
-                                                                    1 ? (
-                                                                        <Popconfirm
-                                                                            title="确认完成加工？"
-                                                                            description="请确保该项目的加工步骤已全部执行完毕。"
-                                                                            onConfirm={() =>
-                                                                                handleApprove(
-                                                                                    record.id,
-                                                                                    item.id,
-                                                                                )
-                                                                            }
-                                                                            okText="确认"
-                                                                            cancelText="取消"
-                                                                            placement="left"
-                                                                        >
-                                                                            <Button
-                                                                                size="small"
-                                                                                type="primary"
-                                                                                className="bg-indigo-600 hover:bg-indigo-700"
-                                                                            >
-                                                                                完成加工
-                                                                            </Button>
-                                                                        </Popconfirm>
-                                                                    ) : item.processing_status ===
-                                                                      2 ? (
-                                                                        <Tag
-                                                                            icon={
-                                                                                <CheckCircleOutlined />
-                                                                            }
-                                                                            color="success"
-                                                                            bordered={
-                                                                                false
-                                                                            }
-                                                                            className="mr-0"
-                                                                        >
-                                                                            已完成
-                                                                        </Tag>
-                                                                    ) : (
-                                                                        <Tag
-                                                                            color="default"
-                                                                            bordered={
-                                                                                false
-                                                                            }
-                                                                            className="mr-0"
-                                                                        >
-                                                                            无需加工
-                                                                        </Tag>
-                                                                    ))}
-                                                            </div>
-                                                        </div>
-                                                    ),
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div className="text-center py-2 text-slate-300 italic text-xs">
-                                                无加工参数信息
-                                            </div>
-                                        )}
-                                    </div>
+                                    <Button
+                                        size="small"
+                                        type="primary"
+                                        className="bg-indigo-600 hover:bg-indigo-700"
+                                    >
+                                        完成加工
+                                    </Button>
+                                </Popconfirm>
+                            )}
+                        </div>
+                    </div>
+                    <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm">
+                        {record.processing_deadline && (
+                            <div className="bg-indigo-50/50 px-3 py-1.5 border-b border-indigo-100 flex justify-end items-center">
+                                <div className="text-xs text-indigo-600 font-medium flex items-center gap-1">
+                                    <span className="text-slate-400">加工截止时间:</span>
+                                    <span className="font-mono font-bold bg-indigo-100/50 px-2 py-0.5 rounded text-[11px] border border-indigo-100/30">
+                                        {record.processing_deadline.split(' ')[0]}
+                                    </span>
                                 </div>
-                            ))}
+                            </div>
+                        )}
+                        <div className="p-2 px-3">
+                            {(record.processing || []).length > 0 ? (
+                                <div className="divide-y divide-slate-50">
+                                    {record.processing.map((p, pIdx) => (
+                                        <div
+                                            key={pIdx}
+                                            className="py-1 first:pt-0 last:pb-0 flex items-center text-sm"
+                                        >
+                                            <span className="text-slate-500 w-1/2">
+                                                {p.method_name}
+                                            </span>
+                                            <div className="flex-1 text-right">
+                                                <span className="font-bold text-slate-700 bg-slate-50 px-3 py-1 rounded border border-slate-100 min-w-[80px] inline-block shadow-sm">
+                                                    {p.option_value || p.value}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-2 text-slate-300 italic text-xs">
+                                    无加工参数信息
+                                </div>
+                            )}
                         </div>
-                    ) : (
-                        <div className="bg-white p-3 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
-                            <Empty
-                                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                description="暂无加工方法"
-                            />
-                        </div>
-                    )}
+                    </div>
                 </div>
             </div>
 

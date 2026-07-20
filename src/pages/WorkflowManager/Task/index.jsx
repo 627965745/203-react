@@ -167,16 +167,7 @@ const TaskList = () => {
                 return <span className="text-xs text-slate-600">{item?.label || val}</span>;
             }
         },
-        {
-            title: "加工",
-            dataIndex: "is_processing",
-            width: 80,
-            render: (val) => (
-                <Tag color={val === 1 ? "green" : "default"}>
-                    {val === 1 ? "需要" : "不需要"}
-                </Tag>
-            )
-        },
+        // V2: 删除“是否需要加工”列 —— 加工需求已下沉到样品级 processing_status
         {
             title: "截止日期",
             dataIndex: "deadline",
@@ -224,7 +215,6 @@ const TaskList = () => {
         physical_state: 0,
         category: 0,
         delivered_by: 1,
-        is_processing: 0,
         deadline: null,
         receiver_id: null,
         description: ""

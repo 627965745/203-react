@@ -63,12 +63,12 @@ const ItemSelectModal = ({ visible, onClose, onSave }) => {
                     <Cascader
                         options={options}
                         multiple
+                        showCheckedStrategy="SHOW_CHILD"
                         placeholder="点击选择分类及项目"
                         showSearch={{
                             filter: (inputValue, path) => 
                                 path.some(option => option.label.toLowerCase().indexOf(inputValue.toLowerCase()) > -1)
                         }}
-                        expandTrigger="hover"
                         maxTagCount="responsive"
                         style={{ height: 'auto', minHeight: '30px' }}
                         dropdownStyle={{ width: '600px' }}

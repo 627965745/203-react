@@ -3,12 +3,14 @@ import { Modal, Cascader, Form, Button, message, Space, Select } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
 import { comboClient } from "../../../api/client";
 import { comboTestItem } from "../../../api/testItem";
+import { comboUser } from "../../../api/user";
 import { templateTask } from "../../../api/workflow";
 
 const DownloadModal = ({ visible, onCancel }) => {
     const [form] = Form.useForm();
     const [clients, setClients] = useState([]);
     const [items, setItems] = useState([]);
+    const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
 
@@ -22,12 +24,14 @@ const DownloadModal = ({ visible, onCancel }) => {
     const fetchOptions = async () => {
         setLoading(true);
         try {
-            const [resClients, resItems] = await Promise.all([
+            const [resClients, resItems, resUsers] = await Promise.all([
                 comboClient(),
-                comboTestItem()
+                comboTestItem(),
+                comboUser()
             ]);
             setClients(resClients.data.data || []);
             setItems(resItems.data.data || []);
+            setUsers(resUsers.data.data || []);
         } finally {
             setLoading(false);
         }
@@ -96,7 +100,7 @@ const DownloadModal = ({ visible, onCancel }) => {
 
     return (
         <Modal
-            title="生成任务模板"
+            title="生成送样单"
             open={visible}
             onCancel={onCancel}
             okText="生成并下载"
@@ -130,19 +134,34 @@ const DownloadModal = ({ visible, onCancel }) => {
                     />
                 </Form.Item>
                 <Form.Item
+                    name="receiver_id"
+                    label="选择收样人"
+                    rules={[{ required: true, message: '请选择收样人' }]}
+                >
+                    <Select
+                        showSearch
+                        placeholder="请选择收样人"
+                        loading={loading}
+                        options={users.map(u => ({ label: u.nickname || u.name, value: u.id }))}
+                        filterOption={(input, option) =>
+                            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                        }
+                    />
+                </Form.Item>
+                <Form.Item
                     name="item_ids"
-                    label="选择检测项目 (按分类选择)"
+                    label="选择检测项目"
                     rules={[{ required: true, message: '请至少选择一个检测项目' }]}
                 >
                     <Cascader
                         options={options}
                         multiple
+                        showCheckedStrategy="SHOW_CHILD"
                         placeholder="点击选择分类及项目"
                         showSearch={{
-                            filter: (inputValue, path) => 
+                            filter: (inputValue, path) =>
                                 path.some(option => option.label.toLowerCase().indexOf(inputValue.toLowerCase()) > -1)
                         }}
-                        expandTrigger="hover"
                         maxTagCount="responsive"
                         style={{ height: 'auto', minHeight: '34px' }}
                         dropdownStyle={{ width: '600px' }}

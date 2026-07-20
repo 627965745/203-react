@@ -6,8 +6,8 @@ const ReviewModal = ({ open, onCancel, onSuccess, data, apis = {}, rejectDescrip
     const [actionLoading, setActionLoading] = useState({});
     const { approve, reject } = apis;
 
-    // data structure: { sampleIds, itemId, details: [{ labCode, itemName, methodName, methodId, results: [...] }] }
-    const { sampleIds = [], itemId, details = [] } = data || {};
+    // V2: data structure: { sampleIds, details: [{ labCode, methodName, methodId, results: [...] }] } —— 移除 item_id
+    const { sampleIds = [], details = [] } = data || {};
     const [processedMethods, setProcessedMethods] = useState({}); // { methodId: 'approve' | 'reject' }
 
     const handleAction = async (methodId, type) => {
@@ -18,7 +18,7 @@ const ReviewModal = ({ open, onCancel, onSuccess, data, apis = {}, rejectDescrip
         try {
             const res = await api({
                 sample_ids: sampleIds,
-                item_id: itemId,
+                // V2: 移除 item_id
                 method_ids: [methodId]
             });
 
@@ -48,11 +48,9 @@ const ReviewModal = ({ open, onCancel, onSuccess, data, apis = {}, rejectDescrip
             title: '详情',
             key: 'info',
             render: (_, record) => (
-                <div className="flex flex-col gap-1">
-                    <div className="text-xs text-slate-400">项目: {record.itemName}</div>
-                    <div className="flex items-center gap-2">
-                        <Tag color="blue" className="m-0 border-none font-bold text-[11px]">{record.methodName}</Tag>
-                    </div>
+                // V2: 方法上提到样品级，不再展示所属检测项目
+                <div className="flex items-center gap-2">
+                    <Tag color="blue" className="m-0 border-none font-bold text-[11px]">{record.methodName}</Tag>
                 </div>
             )
         },
@@ -60,13 +58,14 @@ const ReviewModal = ({ open, onCancel, onSuccess, data, apis = {}, rejectDescrip
             title: '录入结果',
             dataIndex: 'results',
             key: 'results',
+            width: 350,
             render: (results) => (
                 <div className="flex flex-col gap-1">
                     {results && results.length > 0 ? (
                         results.map((r, i) => (
-                            <div key={i} className="flex items-center bg-slate-50 px-3 py-1 rounded border border-slate-100 text-[14px]">
-                                <span className="text-slate-500 mr-2 min-w-[60px]">{r.name}:</span>
-                                <span className="font-bold text-slate-800">{r.value}</span>
+                            <div key={i} className="flex items-start bg-slate-50 px-3 py-1.5 rounded border border-slate-100 text-[14px]">
+                                <span className="text-slate-500 mr-2 min-w-[60px] shrink-0 pt-[1px]">{r.name}:</span>
+                                <span className="font-bold text-slate-800 break-words whitespace-pre-wrap flex-1 min-w-0">{r.value}</span>
                             </div>
                         ))
                     ) : (

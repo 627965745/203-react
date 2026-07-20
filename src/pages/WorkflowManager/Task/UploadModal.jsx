@@ -64,7 +64,7 @@ const UploadModal = ({ visible, onCancel, onSuccess }) => {
 
     return (
         <Modal
-            title="导入任务"
+            title="导入送样单"
             open={visible}
             onCancel={onCancel}
             onOk={handleUpload}

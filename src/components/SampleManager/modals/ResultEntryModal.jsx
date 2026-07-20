@@ -14,7 +14,8 @@ import { resultCreateTestingSample } from '../../../api/testing';
 import dayjs from 'dayjs';
 import axios from 'axios';
 
-const ResultEntryModal = ({ open, onCancel, onSuccess, methodId, methodName, methodData, itemId, sampleData, readOnly = false }) => {
+// V2: 结果录入不再需要 itemId —— 结果主键由 (sample_id, item_id, field_id) 变为 (sample_id, field_id)
+const ResultEntryModal = ({ open, onCancel, onSuccess, methodId, methodName, methodData, sampleData, readOnly = false }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -111,7 +112,7 @@ const ResultEntryModal = ({ open, onCancel, onSuccess, methodId, methodName, met
                 
                 return resultCreateTestingSample({
                     sample_id: sampleData.id,
-                    item_id: itemId,
+                    // V2: 移除 item_id，结果主键为 (sample_id, field_id)
                     field_id: f.id,
                     value: val != null ? String(val) : ""
                 });
@@ -142,11 +143,11 @@ const ResultEntryModal = ({ open, onCancel, onSuccess, methodId, methodName, met
         const isDisabled = (source_type !== 0) || readOnly; // Only manual (0) is editable, and never in readOnly mode
         
         if (data_type === 1) { // Number
-            inputComponent = <InputNumber className="w-full" disabled={isDisabled} placeholder="请输入数值" />;
+            inputComponent = <InputNumber className="w-full" style={{ width: "50%" }} disabled={isDisabled} placeholder="请输入数值" />;
         } else if (data_type === 2) { // Date
-            inputComponent = <DatePicker className="w-full" disabled={isDisabled} placeholder="请选择日期" />;
+            inputComponent = <DatePicker className="w-full" style={{ width: "50%" }} disabled={isDisabled} placeholder="请选择日期" />;
         } else { // Text
-            inputComponent = <Input disabled={isDisabled} placeholder="请输入内容" />;
+            inputComponent = <Input.TextArea autoSize={{ minRows: 2, maxRows: 6 }} className="w-full" style={{ width: "100%" }} disabled={isDisabled} placeholder="请输入内容" />;
         }
 
         const indicators = [];

@@ -85,7 +85,7 @@ const AddEdit = ({ record, onChange }) => {
                 <div className="mb-2">标准文件</div>
                 <div className="flex gap-2">
                     <Input
-                        placeholder="请输入链接或上传文件"
+                        placeholder="上传后自动填充，也可直接粘贴链接"
                         value={record.standard_file || ""}
                         onChange={(e) => updateField("standard_file", e.target.value)}
                         maxLength={1000}

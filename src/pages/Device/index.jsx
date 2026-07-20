@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useRef } from "react";
 import { Switch, message, Tag, Button, Form, DatePicker, Space } from "antd";
-import { SafetyCertificateOutlined } from "@ant-design/icons";
+import { SafetyCertificateOutlined, HistoryOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { useAuth } from "../../contexts/AuthContext";
 import CrudTable from "../../components/CrudTable";
 import {
     readDevice,
@@ -10,13 +9,14 @@ import {
     updateDevice,
     deleteDevice,
     calibrateDevice,
+    batchCalibrateDevice,
 } from "../../api/device";
 import AddEdit from "./AddEdit";
 import CalibrateModal from "./CalibrateModal";
 import BatchCalibrateModal from "./BatchCalibrateModal";
+import CalibrateHistoryModal from "./CalibrateHistoryModal";
 
 const DeviceList = () => {
-    const { user } = useAuth();
     // We can use a unique key to force CrudTable to reload if needed,
     // but usually updating the record locally is enough if we don't want a full reload.
     // In this case, since CrudTable manages its own state 'data',
@@ -26,6 +26,10 @@ const DeviceList = () => {
         visible: false,
         record: null,
     });
+    const [historyModal, setHistoryModal] = useState({
+        open: false,
+        record: null,
+    });
     const [form] = Form.useForm();
 
     // Batch calibration
@@ -33,7 +37,6 @@ const DeviceList = () => {
     const [batchRows, setBatchRows] = useState([]);
     const [batchSubmitting, setBatchSubmitting] = useState(false);
     const clearBatchRef = useRef(null);
-    const [batchForm] = Form.useForm();
 
     const batchActions = useMemo(
         () => [
@@ -46,43 +49,25 @@ const DeviceList = () => {
                 onClick: (rows, { clearSelection }) => {
                     setBatchRows(rows);
                     clearBatchRef.current = clearSelection;
-                    batchForm.resetFields();
                     setBatchCalibrateOpen(true);
                 },
             },
         ],
-        [batchForm],
+        [],
     );
 
-    const handleBatchCalibrate = async (values) => {
+    const handleBatchCalibrate = async (payload) => {
         setBatchSubmitting(true);
         try {
-            const calibrator = user?.nickname || user?.name || "未知用户";
-            const calibrated_at = values.calibrated_at.format("YYYY-MM-DD");
-            const results = await Promise.all(
-                batchRows.map((row) =>
-                    calibrateDevice({
-                        device_id: row.id,
-                        calibrator,
-                        calibrated_at,
-                    }).then(
-                        (res) => res.data.status === 0,
-                        () => false,
-                    ),
-                ),
-            );
-            const okCount = results.filter(Boolean).length;
-            const failCount = results.length - okCount;
-            if (failCount === 0) {
-                message.success(`已为 ${okCount} 台设备添加校准记录`);
+            const res = await batchCalibrateDevice({ calibrations: payload });
+            if (res.data.status === 0) {
+                message.success(`已为 ${payload.length} 台设备添加校准记录`);
+                setBatchCalibrateOpen(false);
+                clearBatchRef.current?.();
+                setRefreshKey((prev) => prev + 1);
             } else {
-                message.warning(
-                    `校准完成：成功 ${okCount} 台，失败 ${failCount} 台`,
-                );
+                message.error(res.data?.message || "批量校准失败");
             }
-            setBatchCalibrateOpen(false);
-            clearBatchRef.current?.();
-            setRefreshKey((prev) => prev + 1);
         } catch (error) {
             message.error("批量校准提交异常");
         } finally {
@@ -93,10 +78,10 @@ const DeviceList = () => {
     const handleCalibrate = async (values) => {
         try {
             const payload = {
-                ...values,
                 device_id: calibrateModal.record.id,
-                calibrator: user?.nickname || user?.name || "未知用户",
+                calibrator: values.calibrator,
                 calibrated_at: values.calibrated_at.format("YYYY-MM-DD"),
+                certificate_file: values.certificate_file?.trim() || null,
             };
             const response = await calibrateDevice(payload);
             if (response.data.status === 0) {
@@ -194,18 +179,34 @@ const DeviceList = () => {
             title: "到期时间",
             dataIndex: "expired_by",
             width: 150,
-            render: (text) => {
+            render: (text, record) => {
                 const isNoRecord = text === "无校准记录";
+                const hasLogs = record.calibration_logs?.length > 0;
                 return (
-                    <span
-                        className={
-                            isNoRecord
-                                ? "text-gray-400 italic"
-                                : "text-orange-500 font-medium"
-                        }
-                    >
-                        {text}
-                    </span>
+                    <div className="flex flex-col items-start">
+                        <span
+                            className={
+                                isNoRecord
+                                    ? "text-gray-400 italic"
+                                    : "text-orange-500 font-medium"
+                            }
+                        >
+                            {text}
+                        </span>
+                        {hasLogs && (
+                            <Button
+                                type="link"
+                                size="small"
+                                icon={<HistoryOutlined />}
+                                className="p-0 h-auto text-xs"
+                                onClick={() =>
+                                    setHistoryModal({ open: true, record })
+                                }
+                            >
+                                校准历史
+                            </Button>
+                        )}
+                    </div>
                 );
             },
         },
@@ -274,8 +275,8 @@ const DeviceList = () => {
                         size="middle"
                         className="ml-4 flex items-center flex-wrap"
                     >
-                        <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">
-                            设备预警筛选:
+                        <span className="text-sm">
+                            设备到期筛选:
                         </span>
                         <DatePicker
                             placeholder="选择到期日期"
@@ -408,32 +409,6 @@ const DeviceList = () => {
                                 </div>
                             </div>
                         </div>
-                        {record.calibration_logs &&
-                            record.calibration_logs.length > 0 && (
-                                <div className="pt-2 border-t border-gray-200">
-                                    <div className="text-gray-400 text-xs mb-2 italic">
-                                        最近校准记录:
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {record.calibration_logs
-                                            .slice(0, 5)
-                                            .map((log, idx) => (
-                                                <Tag
-                                                    key={idx}
-                                                    className="m-0 bg-white border-gray-200 text-[12px]"
-                                                >
-                                                    {log.calibrated_at} (
-                                                    {log.calibrator})
-                                                </Tag>
-                                            ))}
-                                        {record.calibration_logs.length > 5 && (
-                                            <span className="text-gray-300 text-[10px]">
-                                                ...
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
                     </div>
                 )}
                 renderActions={(record) => (
@@ -453,7 +428,6 @@ const DeviceList = () => {
             <CalibrateModal
                 open={calibrateModal.visible}
                 record={calibrateModal.record}
-                user={user}
                 form={form}
                 onCancel={() =>
                     setCalibrateModal({ visible: false, record: null })
@@ -463,12 +437,16 @@ const DeviceList = () => {
 
             <BatchCalibrateModal
                 open={batchCalibrateOpen}
-                count={batchRows.length}
-                user={user}
-                form={batchForm}
+                rows={batchRows}
                 submitting={batchSubmitting}
                 onCancel={() => setBatchCalibrateOpen(false)}
                 onSubmit={handleBatchCalibrate}
+            />
+
+            <CalibrateHistoryModal
+                open={historyModal.open}
+                record={historyModal.record}
+                onCancel={() => setHistoryModal({ open: false, record: null })}
             />
         </>
     );

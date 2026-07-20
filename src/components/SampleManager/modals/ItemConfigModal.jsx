@@ -1,245 +1,130 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Form, Select, DatePicker, Button, message, Divider, Space, Tag, Alert, Cascader } from "antd";
-import { ToolOutlined, ExperimentOutlined, InfoCircleOutlined, UserOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
+import { Modal, Form, Button, message, Space, Tag, Spin } from "antd";
+import { ExperimentOutlined, UserOutlined } from "@ant-design/icons";
 import { comboTestMethod } from "../../../api/testMethod";
 import { methodTestItem } from "../../../api/testItem";
-import { comboProcessingMethod } from "../../../api/processingMethod";
+import MethodSelector from "../MethodSelector";
 
-const ItemConfigModal = ({ 
-    visible, 
-    onClose, 
-    onSaveMethod, 
-    onSaveProcess,
-    onDeleteProcess,
+// V2: 「样品级 方法分派」配置。加工不再在此配置 —— 前处理/加工要求框已移除，
+//     加工任务改为在“样品项目与生命周期管理”里，对已添加的方法卡片单独添加。
+// V2: 分派检测方法挑选试验方法，支持从“检测项目关联的建议方法”或“全量方法”中多选。
+const ItemConfigModal = ({
+    visible,
+    onClose,
+    onSaveMethod,
     onDeleteMethod,
     disabled = false,
-    hideProcessing = false,
-    itemId, 
-    itemName,
-    itemData // This contains processing and methods list for this item
+    sampleData, // V2: 携带样品的 items / methods
 }) => {
-    const [procForm] = Form.useForm();
     const [methodForm] = Form.useForm();
-    
+
     const [loading, setLoading] = useState(false);
-    const [procOptions, setProcOptions] = useState([]);
     const [testMethods, setTestMethods] = useState([]);
-    
-    const [procDropdownOpen, setProcDropdownOpen] = useState(false);
-    
-    const cascaderOptions = React.useMemo(() => {
-        return procOptions.map(m => ({
-            label: m.name,
-            value: String(m.id),
-            children: m.options?.map(o => ({
-                label: o.value,
-                value: String(o.id)
-            }))
-        }));
-    }, [procOptions]);
-    
-    const isProcessingLocked = React.useMemo(() => {
-        return itemData?.methods?.some(m => m.status > 0);
-    }, [itemData]);
+    const [suggestedMethods, setSuggestedMethods] = useState([]);
+    const [suggestedLoading, setSuggestedLoading] = useState(false);
+
+    const sampleItemIds = React.useMemo(
+        () => (sampleData?.items || []).map(i => i.item_id || i.id),
+        [sampleData]
+    );
 
     useEffect(() => {
-        if (visible && itemId) {
-            fetchData();
-            // Reset and set Proc values
-            if (itemData?.processing?.length > 0) {
-                procForm.setFieldsValue({
-                    option_ids: itemData.processing.map(p => [String(p.method_id), String(p.option_id || p.id)]),
-                    deadline: itemData.processing_deadline ? dayjs(itemData.processing_deadline) : null
-                });
-            } else {
-                procForm.resetFields();
-            }
-            // Reset Method values (usually for adding a new one, editing is separate but here we can simplify)
+        if (visible) {
+            fetchTestMethods();
             methodForm.resetFields();
         }
-    }, [visible, itemId, itemData, procForm, methodForm]);
+    }, [visible, methodForm]);
 
-    const fetchData = async () => {
+    const fetchTestMethods = async () => {
         setLoading(true);
+        setSuggestedLoading(true);
         try {
-            const [resProc, resMethods] = await Promise.all([
-                comboProcessingMethod({ item_id: itemId }),
-                methodTestItem({ id: itemId })
+            const [comboRes, suggestedRes] = await Promise.all([
+                comboTestMethod(),
+                sampleItemIds.length > 0 ? methodTestItem({ ids: sampleItemIds }) : Promise.resolve({ data: { data: [] } })
             ]);
-            setProcOptions(resProc.data.data || []);
-            setTestMethods(resMethods.data.data || []);
-        } catch (error) {
-            message.error("加载配置选项失败");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fetchMethods = async (searchQuery = '') => {
-        try {
-            const res = await methodTestItem({ 
-                id: itemId, 
-                query: searchQuery 
-            });
-            setTestMethods(res.data.data || []);
+            setTestMethods(comboRes.data?.data || []);
+            setSuggestedMethods(suggestedRes.data?.data || []);
         } catch (error) {
             message.error("获取方法失败");
+        } finally {
+            setLoading(false);
+            setSuggestedLoading(false);
         }
-    };
-
-    const handleMethodSearch = (value) => {
-        fetchMethods(value);
-    };
-
-    const handleSaveProcess = () => {
-        procForm.validateFields().then(values => {
-            onSaveProcess(itemId, {
-                ...values,
-                option_ids: values.option_ids?.map(path => {
-                    const leaf = Array.isArray(path) ? path[path.length - 1] : path;
-                    return isNaN(Number(leaf)) ? leaf : Number(leaf);
-                }),
-                deadline: values.deadline ? values.deadline.format("YYYY-MM-DD") : null
-            });
-        });
     };
 
     const handleSaveMethod = async () => {
         try {
             const values = await methodForm.validateFields();
-            
-            // If there are existing methods, we check if we need to replace
-            // The user wants to change the method by deleting the old one and creating a new one
-            if (itemData?.methods?.length > 0) {
-                const isDifferent = itemData.methods.some(m => m.method_id !== values.method_id);
-                if (isDifferent) {
-                    setLoading(true);
-                    for (const m of itemData.methods) {
-                        await onDeleteMethod(itemId, m.method_id);
-                    }
-                }
-            }
-            
-            await onSaveMethod(itemId, values);
+            // V2: 样品级方法分派，支持一次选择多个方法，直接新增（不再替换）
+            await onSaveMethod(values);
             methodForm.resetFields();
         } catch (error) {
             // Validation failed or API error
-        } finally {
-            setLoading(false);
         }
     };
 
+    // V2: 已分派方法读取样品级 methods
+    const assignedMethods = sampleData?.methods || [];
+    // 已分派的方法 id，避免在下拉里重复选择
+    const assignedMethodIds = React.useMemo(
+        () => assignedMethods.map(m => m.method_id || m.id),
+        [assignedMethods],
+    );
+
     return (
-        <Modal 
+        <Modal
             title={
                 <Space>
-                    <span className="text-lg font-black text-slate-800">项目精细化配置: {itemName}</span>
-                    <span className="text-slate-400 font-mono text-sm">#{itemId}</span>
+                    <span className="text-lg font-black text-slate-800">分派检测方法</span>
+                    <span className="text-slate-400 font-mono text-sm">
+                        {sampleData?.task_lab_code}-{sampleData?.lab_code?.toString().padStart(4, '0')}
+                    </span>
                 </Space>
             }
-            open={visible} 
-            onCancel={onClose} 
+            open={visible}
+            onCancel={onClose}
             footer={null}
-            centered 
+            centered
             width={800}
             destroyOnClose
         >
-            <div className="space-y-8 py-4">
-                {/* Section 1: Processing */}
-                {!hideProcessing && (
-                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                        <div className="flex justify-between items-center mb-4">
-                            <div className="text-sm font-black text-slate-700 flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center">
-                                    <ToolOutlined />
-                                </div>
-                                <span>前处理 (加工) 配置</span>
-                            </div>
-                            {itemData?.processing_status === 1 && !disabled && (
-                                <Button danger type="link" size="small" onClick={() => onDeleteProcess(itemId)}>删除当前配置</Button>
-                            )}
-                        </div>
-                        
-                        {isProcessingLocked && (
-                            <Alert 
-                                message="前处理要求已锁定" 
-                                description="由于试验方法已下发或正在执行，无法修改前处理配置。" 
-                                type="warning" 
-                                showIcon 
-                                className="mb-6 rounded-xl"
-                            />
-                        )}
-                        
-                        <Form form={procForm} layout="vertical" disabled={isProcessingLocked || disabled}>
-                            <Form.Item name="option_ids" label="加工方法与选项" rules={[{ required: true, message: '请选择加工要求' }]}>
-                                <Cascader 
-                                    multiple
-                                    placeholder={cascaderOptions.length > 0 ? "选择加工工序及其具体参数" : "暂无可选加工方法"}
-                                    options={cascaderOptions}
-                                    showSearch
-                                    className="w-full"
-                                    expandTrigger="hover"
-                                    maxTagCount="responsive"
-                                    dropdownMenuColumnStyle={{ minWidth: '160px' }}
-                                    displayRender={(labels) => labels.join(' / ')}
-                                    showCheckedStrategy="SHOW_CHILD"
-                                />
-                            </Form.Item>
-                            <Form.Item label="预期完成时间" className="mb-0">
-                                <div className="flex gap-4 items-center">
-                                    <Form.Item name="deadline" rules={[{ required: true, message: '请设定日期' }]} noStyle>
-                                        <DatePicker 
-                                            className="flex-1 h-10 rounded-lg" 
-                                            placeholder="选择日期" 
-                                            disabledDate={current => current && current < dayjs().startOf('day')}
-                                        />
-                                    </Form.Item>
-                                    {!isProcessingLocked && !disabled && (
-                                        <Button type="primary" className="h-10 px-8 rounded-lg bg-slate-900 flex-shrink-0" onClick={handleSaveProcess}>更新加工要求</Button>
-                                    )}
-                                </div>
-                            </Form.Item>
-                        </Form>
-                    </div>
-                )}
-
-                {/* Section 2: Testing Method Addition */}
+            <div className="py-4">
+                {/* V2: 仅保留方法分派；加工配置框已移除 */}
                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
                     <div className="text-sm font-black text-slate-700 flex items-center gap-2 mb-4">
                         <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
                             <ExperimentOutlined />
                         </div>
-                        <span>分配检测试验方法</span>
+                        <span>分派检测试验方法</span>
                     </div>
 
                     <Form form={methodForm} layout="vertical" disabled={disabled}>
-                        <Form.Item label="检测方法" className="mb-0">
-                            <div className="flex gap-4 items-center">
-                                <Form.Item name="method_id" rules={[{ required: true, message: '必选' }]} noStyle>
-                                    <Select 
-                                        placeholder={testMethods.length > 0 ? "请选择" : "暂无关联方法"} 
-                                        options={testMethods.map(m => ({ label: m.name, value: m.id }))}
-                                        showSearch
-                                        onSearch={handleMethodSearch}
-                                        optionFilterProp="label"
-                                        className="flex-1 h-10"
-                                    />
-                                </Form.Item>
-                                {!disabled && (
-                                    <Button type="primary" ghost className="h-10 px-8 rounded-lg border-blue-200 flex-shrink-0" onClick={handleSaveMethod}>
-                                        分派该方法
-                                    </Button>
-                                )}
+                        {loading || suggestedLoading ? (
+                            <div className="py-6 text-center"><Spin /></div>
+                        ) : (
+                            <Form.Item name="method_id" rules={[{ required: true, message: '请至少选择一个检测方法' }]} className="mb-0">
+                                <MethodSelector
+                                    suggestedMethods={suggestedMethods}
+                                    allMethods={testMethods}
+                                    disabledIds={assignedMethodIds}
+                                />
+                            </Form.Item>
+                        )}
+                        {!disabled && (
+                            <div className="mt-4 flex justify-end">
+                                <Button type="primary" onClick={handleSaveMethod} loading={loading}>
+                                    分派选中的方法
+                                </Button>
                             </div>
-                        </Form.Item>
+                        )}
                     </Form>
-                    
-                    {itemData?.methods?.length > 0 && (
+
+                    {assignedMethods.length > 0 && (
                         <div className="mt-6 border-t border-slate-200 pt-4">
-                            <p className="text-[12px] text-slate-400 font-bold uppercase tracking-wider mb-3">已分发的方法列表 ({itemData.methods.length})</p>
+                            <p className="text-[12px] text-slate-400 font-bold uppercase tracking-wider mb-3">已分派的方法列表 ({assignedMethods.length})</p>
                             <div className="space-y-3">
-                                {itemData.methods.map(m => {
+                                {assignedMethods.map(m => {
                                     const statusCfg = {
                                         0: { label: "管理组未下发", color: "default" },
                                         1: { label: "组长未下发", color: "blue" },
@@ -250,7 +135,7 @@ const ItemConfigModal = ({
                                     }[m.status] || { label: "未知状态", color: "default" };
 
                                     return (
-                                        <div key={m.method_id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm transition-all hover:shadow-md">
+                                        <div key={m.method_id || m.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm transition-all hover:shadow-md">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div className="flex flex-col gap-1">
                                                     <span className="font-bold text-slate-800 text-sm">{m.method_name || m.name}</span>
@@ -281,7 +166,6 @@ const ItemConfigModal = ({
                                                         {m.tester_name || (m.status === 0 ? '等待管理组下发' : (m.status === 1 ? '等待组长指派检测员' : '未指派'))}
                                                     </span>
                                                 </div>
-                                                <span className="text-[12px] text-slate-400">试验执行人</span>
                                             </div>
                                         </div>
                                     );

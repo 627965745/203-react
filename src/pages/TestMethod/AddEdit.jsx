@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
-import { Input, Space } from "antd";
+import { Input, Space, Upload, Button, message } from "antd";
+import { UploadOutlined, LoadingOutlined } from "@ant-design/icons";
+import { uploadFile } from "../../api/user";
 
 const AddEdit = ({ record, onChange }) => {
     const [errors, setErrors] = useState({});
+    const [uploading, setUploading] = useState(false);
 
     const validateInputs = () => {
         const newErrors = {};
@@ -31,6 +34,27 @@ const AddEdit = ({ record, onChange }) => {
         }
     };
 
+    const handleUpload = async ({ file }) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        setUploading(true);
+        try {
+            const response = await uploadFile(formData);
+            if (response.data.status === 0) {
+                const filename = response.data.data;
+                updateField("standard_file", `/uploads/${filename}`);
+                message.success("标准文件上传成功");
+            } else {
+                message.error(response.data.message || "上传文件失败");
+            }
+        } catch (error) {
+            console.error("File upload error:", error);
+            message.error(error.response?.data?.message || "上传文件出错");
+        } finally {
+            setUploading(false);
+        }
+    };
+
     return (
         <Space orientation="vertical" className="w-full" size="middle">
             <div>
@@ -55,6 +79,31 @@ const AddEdit = ({ record, onChange }) => {
                     maxLength={255}
                 />
                 {errors.code && <div className="text-red-500 text-sm mt-1">{errors.code}</div>}
+            </div>
+
+            <div>
+                <div className="mb-2">标准文件</div>
+                <div className="flex gap-2">
+                    <Input
+                        placeholder="请输入链接或上传文件"
+                        value={record.standard_file || ""}
+                        onChange={(e) => updateField("standard_file", e.target.value)}
+                        maxLength={1000}
+                    />
+                    <Upload
+                        customRequest={handleUpload}
+                        showUploadList={false}
+                        beforeUpload={() => true}
+                    >
+                        <Button
+                            icon={uploading ? <LoadingOutlined /> : <UploadOutlined />}
+                            loading={uploading}
+                            className="rounded-lg font-semibold"
+                        >
+                            {record.standard_file ? "重新上传" : "上传"}
+                        </Button>
+                    </Upload>
+                </div>
             </div>
         </Space>
     );

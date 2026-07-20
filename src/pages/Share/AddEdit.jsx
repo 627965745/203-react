@@ -87,7 +87,7 @@ const AddEdit = ({ record, onChange }) => {
                 <div className="mb-2 font-bold text-slate-700">文件链接 (URL) <span className="text-red-500">*</span></div>
                 <div className="flex gap-2">
                     <Input
-                        placeholder="请输入或上传文件链接"
+                        placeholder="请输入链接或上传文件"
                         value={record.url || ""}
                         onChange={(e) => updateField("url", e.target.value)}
                         status={errors.url ? "error" : ""}

@@ -6,8 +6,9 @@ import { comboTestItem } from "../../api/testItem";
 import AddEdit from './AddEdit';
 import FieldDrawer from './FieldDrawer';
 import ArrangeModal from './ArrangeModal';
-import { SafetyCertificateOutlined, CodeOutlined, SettingOutlined, LinkOutlined } from "@ant-design/icons";
+import { SafetyCertificateOutlined, CodeOutlined, SettingOutlined, LinkOutlined, DownloadOutlined } from "@ant-design/icons";
 import { Button, Tag, Tooltip } from "antd";
+import axios from "axios";
 
 const TestMethodList = () => {
     const [drawerVisible, setDrawerVisible] = useState(false);
@@ -40,6 +41,27 @@ const TestMethodList = () => {
         ],
         [],
     );
+
+    const handleDownload = useCallback(async (url, filename) => {
+        try {
+            const downloadUrl = `${window.location.origin}${url}`;
+            const response = await axios.get(downloadUrl, { responseType: "blob" });
+            const blob = new Blob([response.data]);
+
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = blobUrl;
+            const ext = url.includes(".") ? `.${url.split(".").pop()}` : "";
+            link.download = filename ? (filename.endsWith(ext) ? filename : `${filename}${ext}`) : (url.split("/").pop() || "download");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error("Download error:", error);
+            window.open(`${window.location.origin}${url}`, "_blank");
+        }
+    }, []);
 
     const handleManageFields = useCallback((record) => {
         setDrawerMethodRecord(record);
@@ -107,6 +129,22 @@ const TestMethodList = () => {
             )
         },
         {
+            title: "标准文件",
+            dataIndex: "standard_file",
+            width: 140,
+            render: (url, record) =>
+                url ? (
+                    <span
+                        onClick={() => handleDownload(url, record.name)}
+                        className="text-blue-600 font-bold hover:underline cursor-pointer inline-flex items-center gap-1"
+                    >
+                        <DownloadOutlined /> 下载
+                    </span>
+                ) : (
+                    <span className="text-gray-300 italic text-[11px]">暂无</span>
+                )
+        },
+        {
             title: "支持验证项目",
             dataIndex: "items",
             width: 220,
@@ -121,7 +159,7 @@ const TestMethodList = () => {
                 </div>
             )
         }
-    ], []);
+    ], [handleDownload]);
 
     const api = useMemo(() => ({
         read: readTestMethod,
@@ -132,7 +170,8 @@ const TestMethodList = () => {
 
     const initialValues = useMemo(() => ({
         name: "",
-        code: ""
+        code: "",
+        standard_file: ""
     }), []);
 
     return (

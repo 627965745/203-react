@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
     Modal,
     Button,
-    Cascader,
     Select,
     DatePicker,
     Form,
@@ -18,7 +17,6 @@ import {
     CheckCircleOutlined,
     CloseCircleOutlined,
     RocketOutlined,
-    AppstoreAddOutlined,
     DeleteOutlined,
     ToolOutlined,
     FileTextOutlined,
@@ -33,8 +31,7 @@ import * as workflowApi from "../../../api/workflow";
 import * as departmentApi from "../../../api/department";
 import * as testingApi from "../../../api/testing";
 import { comboDepartment } from "../../../api/department";
-import { comboTestItem, methodTestItem } from "../../../api/testItem";
-import { comboTestMethod } from "../../../api/testMethod";
+import { processingOptionTestMethod } from "../../../api/testMethod";
 import { comboProcessingMethod } from "../../../api/processingMethod";
 import { comboUser } from "../../../api/user";
 
@@ -67,8 +64,8 @@ const MethodStatusMap = {
  * The set of batch operations available per module. Exported so the sample
  * pages can build their toolbar `batchActions` from the same source of truth.
  */
-// V2: 方法/加工上提到样品级。leaf 表示叶子层级：
-//   'sample' -> 只需选样品；'item' -> 样品>检测项目；'method' -> 样品>检测方法
+// V3: item 与 method 强绑定 —— "批量添加/删除项目"（itemCreate/itemDelete）已删除，不再有
+//     独立的项目分配操作。leaf 表示叶子层级：'sample' -> 只需选样品；'method' -> 样品>项目>方法
 export const getOperations = (module) => {
     let ops = [];
     if (module === "testing") {
@@ -91,21 +88,7 @@ export const getOperations = (module) => {
         ];
     } else {
         ops = [
-            {
-                label: "批量添加项目",
-                value: "itemCreate",
-                icon: <AppstoreAddOutlined />,
-                color: "blue",
-                leaf: "sample",
-            },
-            {
-                label: "批量删除项目",
-                value: "itemDelete",
-                icon: <DeleteOutlined />,
-                color: "red",
-                leaf: "item",
-            },
-            // V2: 添加方法只需选样品；删除方法为 样品>方法
+            // V3: 添加方法只需选样品；删除方法为 样品>项目>方法
             {
                 label: "批量添加方法",
                 value: "methodCreate",
@@ -200,14 +183,13 @@ const SampleBatchModal = ({
 
     const [departments, setDepartments] = useState([]);
     const [users, setUsers] = useState([]);
-    const [itemOptions, setItemOptions] = useState([]);
     const [procOptions, setProcOptions] = useState([]);
-    const [availableMethods, setAvailableMethods] = useState([]);
-    // 与「单独添加」一致：方法/加工都提供“建议的”+“全部”两组选项
-    const [allTestMethods, setAllTestMethods] = useState([]);
     const [suggestedProcOptions, setSuggestedProcOptions] = useState([]);
-    // 已对所有目标样品都添加过的方法/加工选项 id —— 在选择器里置灰，防止重复添加
-    const [disabledMethodIds, setDisabledMethodIds] = useState([]);
+    // V3: item 与 method 强绑定，methodCreate 不再需要"建议的/全部"两组方法列表 ——
+    // MethodSelector 自行按项目懒加载方法；这里只需算出已对全部目标样品添加过的
+    // {item_id, method_id} 组合键（"itemId-methodId"），在选择器里置灰防止重复添加
+    const [disabledPairs, setDisabledPairs] = useState([]);
+    // 已对所有目标样品都添加过的加工选项 id —— 在选择器里置灰，防止重复添加
     const [disabledProcOptionIds, setDisabledProcOptionIds] = useState([]);
 
     const [form] = Form.useForm();
@@ -224,7 +206,7 @@ const SampleBatchModal = ({
         );
     };
 
-    // Per-sample summary for the no-tree "add" op (itemCreate).
+    // Per-sample summary for the no-tree "add" op (methodCreate).
     const sampleSummary = (s) => {
         if (isSampleRestricted(s))
             return { disabled: true, note: " (非本人创建)" };
@@ -238,11 +220,10 @@ const SampleBatchModal = ({
     );
 
     // Resolve APIs based on module
+    // V3: itemCreate/itemDelete 已删除，不再出现在这些映射里
     const api = useMemo(() => {
         const maps = {
             workflow: {
-                itemCreate: workflowApi.itemCreateSample,
-                itemDelete: workflowApi.itemDeleteSample,
                 methodCreate: workflowApi.methodCreateSample,
                 methodDelete: workflowApi.methodDeleteSample,
                 processCreate: workflowApi.processCreateSample,
@@ -252,8 +233,6 @@ const SampleBatchModal = ({
                 reject: workflowApi.rejectSample,
             },
             department: {
-                itemCreate: departmentApi.itemCreateDepartmentSample,
-                itemDelete: departmentApi.itemDeleteDepartmentSample,
                 methodCreate: departmentApi.methodCreateDepartmentSample,
                 methodDelete: departmentApi.methodDeleteDepartmentSample,
                 processCreate: null,
@@ -264,8 +243,6 @@ const SampleBatchModal = ({
                 rollback: departmentApi.rollbackDepartmentSample,
             },
             testing: {
-                itemCreate: testingApi.itemCreateTestingSample,
-                itemDelete: testingApi.itemDeleteTestingSample,
                 methodCreate: testingApi.methodCreateTestingSample,
                 methodDelete: testingApi.methodDeleteTestingSample,
                 processCreate: null,
@@ -283,9 +260,8 @@ const SampleBatchModal = ({
     useEffect(() => {
         if (!open || !operation) return;
         form.resetFields();
-        setAvailableMethods([]);
 
-        // V2: sample 级操作（itemCreate/methodCreate/processCreate/processDelete）
+        // V3: sample 级操作（methodCreate/processCreate/processDelete）
         //     直接作用于可操作样品，预置选择；其它操作在树中选择。
         if (operation.leaf === "sample") {
             setSelections(editableSamples.map((s) => [s.id]));
@@ -296,41 +272,18 @@ const SampleBatchModal = ({
         const load = async () => {
             setLoading(true);
             try {
-                if (operation.value === "itemCreate") {
-                    const res = await comboTestItem();
-                    setItemOptions(res.data.data || []);
-                } else if (operation.value === "methodCreate") {
-                    // V2: 方法上提到样品级 —— 建议的方法来自所选样品下所有检测项目，全部方法来自 comboTestMethod
-                    const allItemIds = Array.from(
-                        new Set(
-                            editableSamples.flatMap((s) =>
-                                (s.items || []).map((i) => i.item_id || i.id),
-                            ),
-                        ),
-                    );
-                    const [suggestedRes, allRes] = await Promise.all([
-                        allItemIds.length
-                            ? methodTestItem({ ids: allItemIds })
-                            : Promise.resolve({ data: { data: [] } }),
-                        comboTestMethod(),
-                    ]);
-                    setAvailableMethods(suggestedRes.data.data || []);
-                    setAllTestMethods(allRes.data.data || []);
-                    // 已对全部目标样品添加过的方法 —— 置灰
-                    setDisabledMethodIds(
+                if (operation.value === "methodCreate") {
+                    // V3: item 与 method 强绑定，MethodSelector 自行按项目懒加载可选方法，
+                    //     这里只需算出已对全部目标样品添加过的 {item_id, method_id} 组合键
+                    setDisabledPairs(
                         intersectIds(editableSamples, (s) =>
-                            (s.methods || []).map((m) => m.method_id || m.id),
+                            (s.methods || []).map((m) => `${m.item_id}-${m.method_id || m.id}`),
                         ),
                     );
                 } else if (operation.value === "processCreate") {
                     // 建议的加工选项：来自可操作样品已分派方法关联的加工选项；全部加工选项：comboProcessingMethod
-                    const allItemIds = Array.from(
-                        new Set(
-                            editableSamples.flatMap((s) =>
-                                (s.items || []).map((i) => i.item_id || i.id),
-                            ),
-                        ),
-                    );
+                    // V3: 直接按已分派方法的 method_id 查 TestMethod/processingOption，
+                    //     不再经由 item_id -> TestItem/method 间接推导
                     const assignedMethodIds = Array.from(
                         new Set(
                             editableSamples.flatMap((s) =>
@@ -340,20 +293,20 @@ const SampleBatchModal = ({
                             ),
                         ),
                     );
-                    const [methodsRes, allProcRes] = await Promise.all([
-                        allItemIds.length
-                            ? methodTestItem({ ids: allItemIds })
+                    const [optionsRes, allProcRes] = await Promise.all([
+                        assignedMethodIds.length
+                            ? processingOptionTestMethod({ ids: assignedMethodIds })
                             : Promise.resolve({ data: { data: [] } }),
                         comboProcessingMethod(),
                     ]);
+                    // V3: processingOption 响应按 method 分组 [{ id(=method_id), processing_options: [...] }]，
+                    //     需要展开每个元素的 processing_options 再按 id 去重
                     const suggestedMap = new Map();
-                    (methodsRes.data.data || [])
-                        .filter((m) => assignedMethodIds.includes(m.id))
-                        .forEach((m) =>
-                            (m.processing_options || []).forEach((opt) =>
-                                suggestedMap.set(opt.id, opt),
-                            ),
-                        );
+                    (optionsRes.data.data || []).forEach((m) =>
+                        (m.processing_options || []).forEach((opt) =>
+                            suggestedMap.set(opt.id, opt),
+                        ),
+                    );
                     setSuggestedProcOptions(Array.from(suggestedMap.values()));
                     setProcOptions(allProcRes.data.data || []);
                     // 已对全部目标样品添加过的加工选项 —— 置灰
@@ -383,7 +336,8 @@ const SampleBatchModal = ({
     const labCodeOf = (s) =>
         `${task?.lab_code || ""}-${s.lab_code?.toString().padStart(4, "0")}`;
 
-    // V2: 树状选择数据。仅 leaf 为 'item'(样品>项目) 或 'method'(样品>方法) 时使用。
+    // V3: 树状选择数据。仅 leaf 为 'process'(样品>加工选项) 或 'method'(样品>项目>方法) 时使用。
+    //     item 与 method 强绑定，'method' 现为三级：样品 > 检测项目 > 检测方法。
     const treeData = useMemo(() => {
         if (!operation || operation.leaf === "sample") return [];
         const leaf = operation.leaf;
@@ -396,8 +350,6 @@ const SampleBatchModal = ({
                 s.creator_name === null ||
                 s.creator_name === undefined;
             const isOperationRestricted = [
-                "itemCreate",
-                "itemDelete",
                 "methodCreate",
                 "methodDelete",
             ].includes(operation.value);
@@ -411,18 +363,7 @@ const SampleBatchModal = ({
             const sampleProcessing = s.processing_status === 1;
 
             let childNodes = [];
-            if (leaf === "item") {
-                // itemDelete —— 样品>检测项目
-                childNodes = (s.items || []).map((item) => {
-                    const itemId = item.item_id || item.id;
-                    const itemName = item.item_name || item.name;
-                    return {
-                        label: itemName,
-                        value: itemId,
-                        disabled: isSelfRestrictDisabled,
-                    };
-                });
-            } else if (leaf === "process") {
+            if (leaf === "process") {
                 childNodes = (s.processing || []).map((p) => {
                     return {
                         label: p.method_name + (p.value ? ` - ${p.value}` : ''),
@@ -431,55 +372,74 @@ const SampleBatchModal = ({
                     };
                 });
             } else {
-                // leaf === 'method' —— 样品>检测方法（V2: 方法上提到样品级）
-                childNodes = (s.methods || []).map((m) => {
-                    let isDisabled = false;
-                    let reason = "";
-
-                    if (isSelfRestrictDisabled) {
-                        isDisabled = true;
-                    } else if (operation.value === "distribute") {
-                        if (sampleProcessing) {
-                            isDisabled = true;
-                            reason = " (加工未完成)";
-                        } else if (module === "workflow" && m.status !== 0) {
-                            isDisabled = true;
-                            reason = " (状态非待下发)";
-                        } else if (
-                            module === "department" &&
-                            !(m.status === 0 || m.status === 1)
-                        ) {
-                            isDisabled = true;
-                            reason = " (状态不可分配)";
-                        }
-                    } else if (
-                        operation.value === "approve" ||
-                        operation.value === "reject"
-                    ) {
-                        let targetStatus = 4; // Workflow
-                        if (module === "department") targetStatus = 3;
-                        else if (module === "testing") targetStatus = 2;
-
-                        if (m.status !== targetStatus) {
-                            isDisabled = true;
-                            reason = ` (非待处理状态)`;
-                        }
-                    } else if (operation.value === "rollback") {
-                        if (module === "department" && m.status !== 1) {
-                            isDisabled = true;
-                            reason = " (状态不可撤回)";
-                        }
-                    } else if (operation.value === "methodDelete") {
-                        // No status restriction on deletion — surface status.
-                        reason = ` · ${
-                            MethodStatusMap[m.status]?.label || "未知状态"
-                        }`;
+                // leaf === 'method' —— 样品 > 检测项目 > 检测方法（V3: item 与 method 强绑定）
+                // 先按 item_id 分组，方法节点挂在其所属项目节点下
+                const itemGroups = new Map(); // item_id -> { itemName, methods: [] }
+                (s.methods || []).forEach((m) => {
+                    const itemId = m.item_id;
+                    if (!itemGroups.has(itemId)) {
+                        itemGroups.set(itemId, { itemName: m.item_name, methods: [] });
                     }
+                    itemGroups.get(itemId).methods.push(m);
+                });
+
+                childNodes = Array.from(itemGroups.entries()).map(([itemId, group]) => {
+                    const methodNodes = group.methods.map((m) => {
+                        let isDisabled = false;
+                        let reason = "";
+
+                        if (isSelfRestrictDisabled) {
+                            isDisabled = true;
+                        } else if (operation.value === "distribute") {
+                            if (sampleProcessing) {
+                                isDisabled = true;
+                                reason = " (加工未完成)";
+                            } else if (module === "workflow" && m.status !== 0) {
+                                isDisabled = true;
+                                reason = " (状态非待下发)";
+                            } else if (
+                                module === "department" &&
+                                !(m.status === 0 || m.status === 1)
+                            ) {
+                                isDisabled = true;
+                                reason = " (状态不可分配)";
+                            }
+                        } else if (
+                            operation.value === "approve" ||
+                            operation.value === "reject"
+                        ) {
+                            let targetStatus = 4; // Workflow
+                            if (module === "department") targetStatus = 3;
+                            else if (module === "testing") targetStatus = 2;
+
+                            if (m.status !== targetStatus) {
+                                isDisabled = true;
+                                reason = ` (非待处理状态)`;
+                            }
+                        } else if (operation.value === "rollback") {
+                            if (module === "department" && m.status !== 1) {
+                                isDisabled = true;
+                                reason = " (状态不可撤回)";
+                            }
+                        } else if (operation.value === "methodDelete") {
+                            // No status restriction on deletion — surface status.
+                            reason = ` · ${
+                                MethodStatusMap[m.status]?.label || "未知状态"
+                            }`;
+                        }
+
+                        return {
+                            label: (m.method_name || m.name) + reason,
+                            value: m.method_id || m.id,
+                            disabled: isDisabled,
+                        };
+                    });
 
                     return {
-                        label: (m.method_name || m.name) + reason,
-                        value: m.method_id || m.id,
-                        disabled: isDisabled,
+                        label: group.itemName || `#${itemId}`,
+                        value: itemId,
+                        children: methodNodes,
+                        disabled: methodNodes.every((n) => n.disabled),
                     };
                 });
             }
@@ -492,8 +452,7 @@ const SampleBatchModal = ({
                     disabled: isSampleDisabled,
                     children: [
                         {
-                            label:
-                                leaf === "item" ? "未配置项目" : (leaf === "process" ? "未配置加工" : "未分配方法"),
+                            label: leaf === "process" ? "未配置加工" : "未分配检测项目及方法",
                             value: `__empty_${s.id}`,
                             checkable: false,
                         },
@@ -513,7 +472,7 @@ const SampleBatchModal = ({
 
     const handleSubmit = async () => {
         if (!operation) return;
-        // V2: 只有 leaf 为 item/method 的操作使用树选择
+        // V3: 只有 leaf 为 process/method 的操作使用树选择
         const usesTree = operation.leaf !== "sample";
         if (usesTree && selections.length === 0) {
             message.warning("请至少选择一项内容");
@@ -526,9 +485,7 @@ const SampleBatchModal = ({
 
         // Validate detail fields for the operations that need them
         try {
-            if (operation.value === "itemCreate")
-                await form.validateFields(["item_ids"]);
-            else if (operation.value === "methodCreate")
+            if (operation.value === "methodCreate")
                 await form.validateFields(["method_ids"]);
             else if (operation.value === "processCreate")
                 await form.validateFields(["option_ids", "deadline"]);
@@ -546,47 +503,8 @@ const SampleBatchModal = ({
             const details = form.getFieldsValue(true);
             const promises = [];
 
-            if (operation.value === "itemCreate") {
-                const sampleIds = Array.from(
-                    new Set(selections.map((path) => path[0])),
-                );
-                const itemIds =
-                    details.item_ids?.map((path) =>
-                        Array.isArray(path) ? path[path.length - 1] : path,
-                    ) || [];
-                if (sampleIds.length && itemIds.length)
-                    promises.push(
-                        api.itemCreate({
-                            sample_ids: sampleIds,
-                            item_ids: itemIds,
-                        }),
-                    );
-            } else if (operation.value === "itemDelete") {
-                const sampleItemMap = {};
-                selections.forEach((path) => {
-                    const sid = path[0],
-                        iid = path[1];
-                    if (sid && iid) {
-                        if (!sampleItemMap[sid]) sampleItemMap[sid] = new Set();
-                        sampleItemMap[sid].add(iid);
-                    }
-                });
-                const itemSetMap = {};
-                Object.entries(sampleItemMap).forEach(([sid, itemSet]) => {
-                    const key = Array.from(itemSet).sort().join(",");
-                    if (!itemSetMap[key]) itemSetMap[key] = [];
-                    itemSetMap[key].push(Number(sid));
-                });
-                Object.entries(itemSetMap).forEach(([itemKey, sids]) =>
-                    promises.push(
-                        api.itemDelete({
-                            sample_ids: sids,
-                            item_ids: itemKey.split(",").map(Number),
-                        }),
-                    ),
-                );
-            } else if (operation.value === "methodCreate") {
-                // V2: 方法上提到样品级 —— 直接给所有可操作样品添加所选方法
+            if (operation.value === "methodCreate") {
+                // V3: item 与 method 强绑定 —— 直接给所有可操作样品添加所选 {item_id, method_id} 组合
                 const methodIds = details.method_ids || [];
                 const sampleIds = editableSamples.map((s) => s.id);
                 if (sampleIds.length && methodIds.length) {
@@ -659,23 +577,28 @@ const SampleBatchModal = ({
                     );
                 }
             } else {
-                // V2: 方法级操作 distribute/approve/reject/rollback/methodDelete
-                //     —— selections 为 [sampleId, methodId]，移除 item_id
-                const methodMap = {}; // methodId -> Set<sampleId>
+                // V3: 方法级操作 distribute/approve/reject/rollback/methodDelete
+                //     —— selections 为 [sampleId, itemId, methodId]，item 与 method 强绑定，
+                //     合并/去重的 key 必须是完整的 {item_id, method_id} 对，不能只用裸 methodId
+                //     （否则同一 methodId 挂在不同 item 下的两条独立记录会被错误地合并成一条）
+                const pairMap = {}; // "itemId-methodId" -> Set<sampleId>
                 selections.forEach((path) => {
                     const sid = path[0],
-                        mid = path[1];
-                    if (sid && mid) {
-                        if (!methodMap[mid]) methodMap[mid] = new Set();
-                        methodMap[mid].add(sid);
+                        iid = path[1],
+                        mid = path[2];
+                    if (sid && iid && mid) {
+                        const pairKey = `${iid}-${mid}`;
+                        if (!pairMap[pairKey]) pairMap[pairKey] = new Set();
+                        pairMap[pairKey].add(sid);
                     }
                 });
-                // 将样品集合完全相同的方法合并成一次请求
-                const sampleSetMap = {}; // sampleKey -> [methodId]
-                Object.entries(methodMap).forEach(([mid, sSet]) => {
+                // 将样品集合完全相同的 {item_id, method_id} 对合并成一次请求
+                const sampleSetMap = {}; // sampleKey -> [{item_id, method_id}]
+                Object.entries(pairMap).forEach(([pairKey, sSet]) => {
                     const key = Array.from(sSet).sort().join(",");
+                    const [iid, mid] = pairKey.split("-").map(Number);
                     if (!sampleSetMap[key]) sampleSetMap[key] = [];
-                    sampleSetMap[key].push(Number(mid));
+                    sampleSetMap[key].push({ item_id: iid, method_id: mid });
                 });
                 Object.entries(sampleSetMap).forEach(([sKey, methodIds]) => {
                     const sids = sKey.split(",").map(Number);
@@ -720,8 +643,8 @@ const SampleBatchModal = ({
 
     if (!operation) return null;
 
-    // V2: leaf 为 'sample' 的操作(itemCreate/methodCreate/processCreate/processDelete)
-    //     直接作用于所选样品，不用树；'item'/'method' 操作用树选择。
+    // V3: leaf 为 'sample' 的操作(methodCreate/processCreate/processDelete)
+    //     直接作用于所选样品，不用树；'process'/'method' 操作用树选择。
     const isSampleLevel = operation.leaf === "sample";
     const showTree = !isSampleLevel;
 
@@ -842,62 +765,22 @@ const SampleBatchModal = ({
                     ) : null}
 
                     {/* Detail area */}
-                    {operation.value === "itemCreate" && (
-                        <>
-                            <Divider className="my-3" />
-                            <Form.Item
-                                name="item_ids"
-                                label={
-                                    <span className="font-black text-slate-700">
-                                        选择要添加的项目
-                                    </span>
-                                }
-                                rules={[
-                                    { required: true, message: "请选择项目" },
-                                ]}
-                            >
-                                <Cascader
-                                    multiple
-                                    options={itemOptions.map((cat) => ({
-                                        label: cat.name,
-                                        value: `cat-${cat.id}`,
-                                        children: (cat.items || []).map(
-                                            (i) => ({
-                                                label: i.name,
-                                                value: i.id,
-                                            }),
-                                        ),
-                                    }))}
-                                    placeholder="搜索或选择项目"
-                                    className="w-full"
-                                    showSearch
-                                    maxTagCount="responsive"
-                                    showCheckedStrategy="SHOW_CHILD"
-                                />
-                            </Form.Item>
-                        </>
-                    )}
-
                     {operation.value === "methodCreate" && (
                         <>
                             <Divider className="my-3" />
-                            {/* V2: 方法上提到样品级，与单独添加一致：建议的方法(勾选) + 全部方法(下拉) */}
+                            {/* V3: item 与 method 强绑定，选择方法即选择「检测项目+检测方法」组合 */}
                             <Form.Item
                                 name="method_ids"
                                 label={
                                     <span className="font-black text-slate-700">
-                                        选择要添加的方法（可多选，将添加到全部目标样品）
+                                        选择要添加的检测项目及方法（可多选，将添加到全部目标样品）
                                     </span>
                                 }
                                 rules={[
-                                    { required: true, message: "请选择方法" },
+                                    { required: true, message: "请选择检测项目及方法" },
                                 ]}
                             >
-                                <MethodSelector
-                                    suggestedMethods={availableMethods}
-                                    allMethods={allTestMethods}
-                                    disabledIds={disabledMethodIds}
-                                />
+                                <MethodSelector disabledPairs={disabledPairs} />
                             </Form.Item>
                         </>
                     )}

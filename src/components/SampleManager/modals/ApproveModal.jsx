@@ -6,7 +6,8 @@ import { approveTestingSample } from '../../../api/testing';
 const ApproveModal = ({ open, onCancel, onSuccess, data }) => {
     const [loading, setLoading] = useState(false);
 
-    // V2: data structure: { sampleIds, methodIds, details: [{ labCode, methodName }] } —— 移除 item_id
+    // V3: data structure: { sampleIds, methodIds, details: [{ labCode, methodName, itemName }] }
+    //     methodIds 现为 [{item_id, method_id}] 对象数组（item 与 method 强绑定）
     const { sampleIds = [], methodIds = [], details = [] } = data || {};
 
     const handleApprove = async () => {
@@ -14,7 +15,7 @@ const ApproveModal = ({ open, onCancel, onSuccess, data }) => {
         try {
             const res = await approveTestingSample({
                 sample_ids: sampleIds,
-                // V2: 移除 item_id
+                // V3: method_ids 为 [{item_id, method_id}] 对象数组
                 method_ids: methodIds
             });
 
@@ -38,13 +39,17 @@ const ApproveModal = ({ open, onCancel, onSuccess, data }) => {
             key: 'labCode',
             render: (text) => <span className="font-mono font-bold text-slate-700">{text}</span>
         },
-        // V2: 方法上提到样品级，移除“检测项目”列
+        // V3: item 与 method 强绑定，方法标签内一并展示所属检测项目
         {
-            title: '检测方法',
+            title: '检测项目 / 方法',
             dataIndex: 'methodName',
             key: 'methodName',
-            width: 150,
-            render: (text) => <Tag color="blue" className="m-0 border-none font-bold">{text}</Tag>
+            width: 200,
+            render: (text, record) => (
+                <Tag color="blue" className="m-0 border-none font-bold">
+                    {record.itemName ? `${record.itemName} / ${text}` : text}
+                </Tag>
+            )
         },
         {
             title: '录入数据',

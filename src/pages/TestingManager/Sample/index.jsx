@@ -45,8 +45,6 @@ import {
     inputCreateTestingSample,
     inputUpdateTestingSample,
     inputDeleteTestingSample,
-    itemCreateTestingSample,
-    itemDeleteTestingSample,
     methodCreateTestingSample,
     methodDeleteTestingSample,
     approveTestingSample,
@@ -121,8 +119,7 @@ const TestingSampleList = () => {
             inputCreate: inputCreateTestingSample,
             inputUpdate: inputUpdateTestingSample,
             inputDelete: inputDeleteTestingSample,
-            itemCreate: itemCreateTestingSample,
-            itemDelete: itemDeleteTestingSample,
+            // V3: itemCreate/itemDelete 已删除 —— item 与 method 强绑定，不再有独立的项目分配操作
             methodCreate: methodCreateTestingSample,
             methodDelete: methodDeleteTestingSample,
 

@@ -223,9 +223,9 @@ const SampleListModal = ({ visible, task, onCancel }) => {
                     <div className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm">
                         {record.processing_deadline && (
                             <div className="bg-indigo-50/50 px-3 py-1.5 border-b border-indigo-100 flex justify-end items-center">
-                                <div className="text-xs text-indigo-600 font-medium flex items-center gap-1">
+                                <div className="text-sm text-indigo-600 font-medium flex items-center gap-1">
                                     <span className="text-slate-400">加工截止时间:</span>
-                                    <span className="font-mono font-bold bg-indigo-100/50 px-2 py-0.5 rounded text-[11px] border border-indigo-100/30">
+                                    <span className="font-mono font-bold bg-indigo-100/50 px-2 py-0.5 rounded text-[12px] border border-indigo-100/30">
                                         {record.processing_deadline.split(' ')[0]}
                                     </span>
                                 </div>

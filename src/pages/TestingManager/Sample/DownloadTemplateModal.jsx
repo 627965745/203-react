@@ -22,7 +22,7 @@ const DownloadTemplateModal = ({ open, onCancel, taskId, taskLabCode }) => {
         }
     }, [open, taskId]);
 
-    // V2: 方法上提到样品级，模板不再按检测项目，只按方法选择
+    // V3: item 与 method 强绑定，method_id 现为 "itemId:methodId" 组合键
     // Reset method when scope or selected sample IDs change
     useEffect(() => {
         form.setFieldsValue({
@@ -56,18 +56,20 @@ const DownloadTemplateModal = ({ open, onCancel, taskId, taskLabCode }) => {
         return [];
     }, [scope, samples, selectedSampleIds]);
 
-    // V2: 直接从样品的 methods（样品级）提取可选方法，不再经过检测项目
+    // V3: item 与 method 强绑定，直接从样品的 methods（每项自带 item_id/item_name）提取可选
+    //     的"检测项目+检测方法"组合；Select 的 value 用 "itemId:methodId" 组合键编码，
+    //     提交时再拆回 {item_id, method_id} 对象（同一 methodId 挂在不同 item 下需分别列出）
     const availableMethods = useMemo(() => {
         const methodMap = new Map();
         activeSamples.forEach((s) => {
             (s.methods || []).forEach((m) => {
                 const methodId = m.method_id || m.id;
-                const methodName = m.method_name || m.name;
-                if (!methodId) return;
-                if (!methodMap.has(methodId)) {
-                    methodMap.set(methodId, {
-                        value: methodId,
-                        label: methodName
+                if (!methodId || m.item_id == null) return;
+                const key = `${m.item_id}:${methodId}`;
+                if (!methodMap.has(key)) {
+                    methodMap.set(key, {
+                        value: key,
+                        label: m.item_name ? `${m.item_name} / ${m.method_name || m.name}` : (m.method_name || m.name)
                     });
                 }
             });
@@ -80,9 +82,10 @@ const DownloadTemplateModal = ({ open, onCancel, taskId, taskLabCode }) => {
             const values = await form.validateFields();
             setDownloading(true);
 
+            // V3: method_id 由 int 改为 {item_id, method_id} 对象，从 "itemId:methodId" 组合键拆回
+            const [itemId, methodId] = values.method_id.split(":").map(Number);
             const payload = {
-                // V2: 移除 item_id，仅传 method_id
-                method_id: values.method_id,
+                method_id: { item_id: itemId, method_id: methodId },
                 task_id: values.scope === "task" ? taskId : null,
                 sample_ids: values.scope === "samples" ? values.sample_ids : null
             };
@@ -217,14 +220,14 @@ const DownloadTemplateModal = ({ open, onCancel, taskId, taskLabCode }) => {
                         </Form.Item>
                     )}
 
-                    {/* V2: 移除“检测项目”选择，方法上提到样品级直接选择 */}
+                    {/* V3: item 与 method 强绑定，选项内一并展示所属检测项目 */}
                     <Form.Item
                         name="method_id"
-                        label={<span className="font-black text-slate-700">检测方法</span>}
-                        rules={[{ required: true, message: "请选择检测方法" }]}
+                        label={<span className="font-black text-slate-700">检测项目 / 方法</span>}
+                        rules={[{ required: true, message: "请选择检测项目及方法" }]}
                     >
                         <Select
-                            placeholder={scope === "samples" && (!selectedSampleIds || selectedSampleIds.length === 0) ? "请先选择样品" : "请选择检测方法"}
+                            placeholder={scope === "samples" && (!selectedSampleIds || selectedSampleIds.length === 0) ? "请先选择样品" : "请选择检测项目及方法"}
                             showSearch
                             optionFilterProp="label"
                             disabled={scope === "samples" && (!selectedSampleIds || selectedSampleIds.length === 0)}

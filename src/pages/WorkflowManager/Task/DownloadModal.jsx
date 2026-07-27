@@ -1,15 +1,14 @@
 import { useState, useEffect } from "react";
-import { Modal, Cascader, Form, Button, message, Space, Select } from "antd";
+import { Modal, Form, Button, message, Space, Select } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
 import { comboClient } from "../../../api/client";
-import { comboTestItem } from "../../../api/testItem";
 import { comboUser } from "../../../api/user";
 import { templateTask } from "../../../api/workflow";
+import MethodSelector from "../../../components/SampleManager/MethodSelector";
 
 const DownloadModal = ({ visible, onCancel }) => {
     const [form] = Form.useForm();
     const [clients, setClients] = useState([]);
-    const [items, setItems] = useState([]);
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
@@ -24,13 +23,12 @@ const DownloadModal = ({ visible, onCancel }) => {
     const fetchOptions = async () => {
         setLoading(true);
         try {
-            const [resClients, resItems, resUsers] = await Promise.all([
+            // V3: 检测项目/方法级联由 MethodSelector 自行加载，这里只需客户与收样人下拉
+            const [resClients, resUsers] = await Promise.all([
                 comboClient(),
-                comboTestItem(),
                 comboUser()
             ]);
             setClients(resClients.data.data || []);
-            setItems(resItems.data.data || []);
             setUsers(resUsers.data.data || []);
         } finally {
             setLoading(false);
@@ -39,13 +37,9 @@ const DownloadModal = ({ visible, onCancel }) => {
 
     const handleDownload = async () => {
         try {
-            const rawValues = await form.validateFields();
+            const values = await form.validateFields();
             setDownloading(true);
-            
-            // Flatten Cascader values [[catId, itemId], ...] to [itemId, ...]
-            const itemIds = (rawValues.item_ids || []).map(path => path[path.length - 1]);
-            const values = { ...rawValues, item_ids: itemIds };
-            
+
             const res = await templateTask(values);
             const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             const fileName = `任务导入模板_${new Date().getTime()}.xlsx`;
@@ -89,15 +83,6 @@ const DownloadModal = ({ visible, onCancel }) => {
         }
     };
 
-    const options = items.map(cat => ({
-        label: cat.name,
-        value: `cat-${cat.id}`,
-        children: (cat.items || []).map(i => ({
-            label: i.name,
-            value: i.id
-        }))
-    }));
-
     return (
         <Modal
             title="生成送样单"
@@ -109,7 +94,7 @@ const DownloadModal = ({ visible, onCancel }) => {
             width={600}
             footer={
                 <div className="flex justify-between w-full">
-                    <Button danger onClick={() => form.setFieldValue('item_ids', [])}>清空项目</Button>
+                    <Button danger onClick={() => form.setFieldValue('method_ids', [])}>清空选择</Button>
                     <Space>
                         <Button onClick={onCancel}>取消</Button>
                         <Button type="primary" loading={downloading} onClick={handleDownload}>生成并下载</Button>
@@ -148,25 +133,13 @@ const DownloadModal = ({ visible, onCancel }) => {
                         }
                     />
                 </Form.Item>
+                {/* V3: item 与 method 强绑定，委托单请求体 item_ids 改为 method_ids: [{item_id, method_id}] */}
                 <Form.Item
-                    name="item_ids"
-                    label="选择检测项目"
-                    rules={[{ required: true, message: '请至少选择一个检测项目' }]}
+                    name="method_ids"
+                    label="选择检测项目及方法"
+                    rules={[{ required: true, message: '请至少选择一个检测项目及方法' }]}
                 >
-                    <Cascader
-                        options={options}
-                        multiple
-                        showCheckedStrategy="SHOW_CHILD"
-                        placeholder="点击选择分类及项目"
-                        showSearch={{
-                            filter: (inputValue, path) =>
-                                path.some(option => option.label.toLowerCase().indexOf(inputValue.toLowerCase()) > -1)
-                        }}
-                        maxTagCount="responsive"
-                        style={{ height: 'auto', minHeight: '34px' }}
-                        dropdownStyle={{ width: '600px' }}
-                        dropdownClassName="large-cascader"
-                    />
+                    <MethodSelector />
                 </Form.Item>
             </Form>
         </Modal>

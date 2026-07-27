@@ -18,14 +18,14 @@ import {
     RollbackOutlined, AuditOutlined, DownloadOutlined, CalendarOutlined
 } from "@ant-design/icons";
 import { comboDepartment } from "../../api/department";
-// V2: 添加加工任务时才现查该方法的 processing_options（不再依赖 sample.methods[] 上是否带此字段）
-import { methodTestItem } from "../../api/testItem";
+// V3: 添加加工任务时按已分派方法的 method_id 直接查 TestMethod/processingOption，
+//     不再经由 item_id -> TestItem/method 间接推导（该接口已不返回 processing_options）
+import { processingOptionTestMethod } from "../../api/testMethod";
 import { comboProcessingMethod } from "../../api/processingMethod";
 import dayjs from "dayjs";
 
 // Modals - we'll assume they are in the same directory or passed as props
 import InputModal from "./modals/InputModal";
-import ItemSelectModal from "./modals/ItemSelectModal";
 import SpecialSampleModal from "./modals/SpecialSampleModal";
 import ResultEntryModal from "./modals/ResultEntryModal";
 import ItemConfigModal from "./modals/ItemConfigModal";
@@ -63,8 +63,6 @@ const DetailDrawer = ({
         inputCreate,
         inputUpdate,
         inputDelete,
-        itemCreate,
-        itemDelete,
         methodCreate,
         methodUpdate,
         methodDelete,
@@ -106,7 +104,6 @@ const DetailDrawer = ({
 
     // Modal Visibility
     const [inputModalVisible, setInputModalVisible] = useSafeState(false, isMounted);
-    const [itemModalVisible, setItemModalVisible] = useSafeState(false, isMounted);
     const [configModalVisible, setConfigModalVisible] = useSafeState(false, isMounted);
     
     // Distribution Modal States
@@ -184,14 +181,15 @@ const DetailDrawer = ({
         if (apis.onSuccess) apis.onSuccess();
     };
 
-    // V2: 方法上提到样品级，审批/审核/撤回不再需要 item_id
+    // V3: item 与 method 强绑定，审批/审核/撤回的 method_ids 需带上 item_id
     const openApproveModal = (method) => {
         setApproveData({
             sampleIds: [sampleData.id],
-            methodIds: [method.method_id || method.id],
+            methodIds: [{ item_id: method.item_id, method_id: method.method_id || method.id }],
             details: [{
                 labCode: `${sampleData.task_lab_code}-${sampleData.lab_code?.toString().padStart(4, '0')}`,
                 methodName: method.method_name || method.name,
+                itemName: method.item_name,
                 results: method.results || []
             }]
         });
@@ -205,6 +203,8 @@ const DetailDrawer = ({
                 labCode: `${sampleData.task_lab_code}-${sampleData.lab_code?.toString().padStart(4, '0')}`,
                 methodName: method.method_name || method.name,
                 methodId: method.method_id || method.id,
+                itemId: method.item_id,
+                itemName: method.item_name,
                 results: method.results || []
             }]
         });
@@ -217,8 +217,8 @@ const DetailDrawer = ({
         try {
             const res = await rollback({
                 sample_ids: [sampleData.id],
-                // V2: 移除 item_id
-                method_ids: [method.method_id || method.id]
+                // V3: method_ids 为 [{item_id, method_id}] 对象数组
+                method_ids: [{ item_id: method.item_id, method_id: method.method_id || method.id }]
             });
 
             if (res.data.status === 0) {
@@ -240,8 +240,8 @@ const DetailDrawer = ({
         const hide = message.loading("正在准备导出模板数据...", 0);
         try {
             const res = await templateSample({
-                // V2: 结果模板不再需要 item_id，仅传 method_id
-                method_id: method.method_id || method.id,
+                // V3: method_id 由 int 改为 {item_id, method_id} 对象
+                method_id: { item_id: method.item_id, method_id: method.method_id || method.id },
                 sample_ids: [sampleData.id]
             });
             hide();
@@ -306,29 +306,10 @@ const DetailDrawer = ({
         } catch (error) {}
     };
 
-    // --- Items Logic ---
-    const handleItemAdd = async (values) => {
-        try {
-            if (!itemCreate) return message.warning("无此操作权限");
-            await itemCreate({ sample_ids: [sampleId], item_ids: values.item_ids });
-            message.success("添加检测项成功");
-            setItemModalVisible(false);
-            setHasChanged(true);
-            fetchSampleDetail();
-        } catch (error) {}
-    };
+    // V3: itemCreate/itemDelete 接口已删除 —— item 与 method 强绑定，不再有独立的"给样品加检测项目"
+    //     操作，统一通过下方的 handleMethodSave/handleMethodDelete 分配/移除 {item_id, method_id} 组合。
 
-    const handleItemDelete = async (itemId) => {
-        try {
-            if (!itemDelete) return message.warning("无此操作权限");
-            await itemDelete({ sample_ids: [sampleId], item_ids: [itemId] });
-            message.success("已移除检测项");
-            setHasChanged(true);
-            fetchSampleDetail();
-        } catch (error) {}
-    };
-
-    // --- Unified Config Logic (V2: 方法/加工上提到样品级，全部移除 item_id) ---
+    // --- Unified Config Logic ---
     const handleMethodSave = async (values) => {
         try {
             if (!methodCreate) return message.warning("无此操作权限");
@@ -336,7 +317,8 @@ const DetailDrawer = ({
             const { method_id, ...otherValues } = values;
             const payload = {
                 sample_ids: [sampleId],
-                // V2: 不再传 item_id
+                // V3: method_id 现为 MethodSelector 产出的 [{item_id, method_id}] 对象数组，
+                //     每个元素自带 item_id，无需再单独拼接
                 method_ids: Array.isArray(method_id) ? method_id : [method_id],
                 ...otherValues
             };
@@ -375,11 +357,14 @@ const DetailDrawer = ({
         } catch (error) {}
     };
 
-    const handleMethodDelete = async (methodId) => {
+    const handleMethodDelete = async (method) => {
         try {
             if (!methodDelete) return message.warning("无此操作权限");
-            // V2: 移除 item_id
-            await methodDelete({ sample_ids: [sampleId], method_ids: [methodId] });
+            // V3: method_ids 为 [{item_id, method_id}] 对象数组
+            await methodDelete({
+                sample_ids: [sampleId],
+                method_ids: [{ item_id: method.item_id, method_id: method.method_id || method.id }]
+            });
             message.success("已移除方法");
             setHasChanged(true);
             fetchSampleDetail();
@@ -392,37 +377,30 @@ const DetailDrawer = ({
         [sampleData]
     );
 
-    // V2: 样品下所有检测项目 id，用于查询某检测方法可用的加工选项
-    const sampleItemIds = useMemo(
-        () => (sampleData?.items || []).map(i => i.item_id || i.id),
-        [sampleData]
-    );
-
-    // V2: 打开“配置加工任务”弹窗
+    // V3: 打开“配置加工任务”弹窗 —— 建议的加工选项直接按已分派方法的 method_id
+    //     查询 TestMethod/processingOption，不再经由 item_id 间接推导
     const openSampleProcTask = () => {
         const currentIds = (sampleData?.processing || []).map(p => p.option_id || p.id);
         setProcTaskOptionIds(currentIds);
         setProcTaskDeadline(sampleData?.processing_deadline ? dayjs(sampleData.processing_deadline) : null);
         setProcTaskVisible(true);
         setProcTaskOptionsLoading(true);
-        
+
+        const assignedMethodIds = Array.from(
+            new Set((sampleData?.methods || []).map(m => m.method_id || m.id))
+        );
+
         Promise.all([
-            methodTestItem({ ids: sampleItemIds }),
+            assignedMethodIds.length > 0
+                ? processingOptionTestMethod({ ids: assignedMethodIds })
+                : Promise.resolve({ data: { data: [] } }),
             comboProcessingMethod()
-        ]).then(([methodRes, comboRes]) => {
-            const list = methodRes.data?.data || [];
-            // 过滤出当前已添加的检测方法
-            const addedMethodIds = (sampleData?.methods || []).map(m => m.method_id || m.id);
-            const addedMethods = list.filter(x => addedMethodIds.includes(x.id));
-            
-            // 提取建议的加工选项
+        ]).then(([optionsRes, comboRes]) => {
+            // V3: processingOption 响应按 method 分组 [{ id(=method_id), processing_options: [...] }]，
+            //     需要展开每个元素的 processing_options 再按 id 去重
             const suggestedMap = new Map();
-            addedMethods.forEach(m => {
-                if (m.processing_options) {
-                    m.processing_options.forEach(opt => {
-                        suggestedMap.set(opt.id, opt);
-                    });
-                }
+            (optionsRes.data?.data || []).forEach(m => {
+                (m.processing_options || []).forEach(opt => suggestedMap.set(opt.id, opt));
             });
             setSuggestedProcOptions(Array.from(suggestedMap.values()));
             setAllProcOptions(comboRes.data?.data || []);
@@ -468,8 +446,8 @@ const DetailDrawer = ({
             if (!distribute) return message.warning("无此操作权限");
             const payload = {
                 sample_ids: [sampleId],
-                // V2: 移除 item_id
-                method_ids: [selectedDistData.method.method_id || selectedDistData.method.id],
+                // V3: method_ids 为 [{item_id, method_id}] 对象数组
+                method_ids: [{ item_id: selectedDistData.method.item_id, method_id: selectedDistData.method.method_id || selectedDistData.method.id }],
                 deadline: values.deadline ? values.deadline.format("YYYY-MM-DD") : null
             };
 
@@ -508,10 +486,10 @@ const DetailDrawer = ({
             const currentHelpers = selectedHelperData.method.helpers?.map(h => h.user_id || h.id) || [];
             const newHelpers = values.helper_ids || [];
 
-            // V2: 移除 item_id；method_id 改为 method_ids 列表
+            // V3: method_ids 为 [{item_id, method_id}] 对象数组
             const payloadBase = {
                 sample_ids: [sampleId],
-                method_ids: [selectedHelperData.method.method_id || selectedHelperData.method.id],
+                method_ids: [{ item_id: selectedHelperData.method.item_id, method_id: selectedHelperData.method.method_id || selectedHelperData.method.id }],
             };
 
             // 1. First delete existing helpers to ensure a clean sync
@@ -566,14 +544,10 @@ const DetailDrawer = ({
                         key: "items",
                         label: <span className="px-4"><ExperimentOutlined /> 检测项管理</span>,
                         children: (
-                            // V2: 样品-方法扁平结构。检测项目(仅名称) 与 检测方法(完整生命周期) 左右分栏。
-                            //     加工要求框已移除，加工任务改到右侧“已添加的方法卡片”上单独添加。
+                            // V3: item 与 method 强绑定 —— 检测项目不再单独增删，而是与检测方法一起
+                            //     以 {item_id, method_id} 组合的形式整体分派/展示，取消原先"检测项目
+                            //     (仅名称)/检测方法(完整生命周期)"左右分栏的布局，改为统一的单一列表。
                             <div className="space-y-6">
-                                <div className="flex justify-between items-center bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                                    <div className="text-slate-500 text-sm max-w-2xl">
-                                        <b>工作流提示：</b> 左侧维护该样品所需的检测项目；右侧分派并跟踪各检测方法的完整生命周期。
-                                    </div>
-                                </div>
 
                                 {/* V2: 样品级加工任务 */}
                                 {!hideProcessing && (
@@ -611,7 +585,7 @@ const DetailDrawer = ({
                                                     <span className="text-slate-400">加工选项：</span>
                                                     <div className="flex flex-wrap gap-2 mt-1">
                                                         {sampleData.processing.map(p => (
-                                                            <Tag key={p.id || p.option_id} className="m-0 bg-orange-50 text-orange-600 border-orange-100 rounded-md px-2 py-0.5 font-bold">
+                                                            <Tag key={p.id || p.option_id} className="mt-1 bg-orange-50 text-orange-600 border-orange-100 rounded-md px-2 py-0.5 font-bold">
                                                                 {p.method_name}
                                                                 {p.value ? ` - ${p.value}` : ''}
                                                             </Tag>
@@ -625,58 +599,30 @@ const DetailDrawer = ({
                                     </div>
                                 )}
 
-                                {/* V2: 左右分栏 —— 左侧检测项目(4/12)、右侧检测方法(8/12，更宽) */}
-                                <div className="grid grid-cols-12 gap-5">
-                                    {/* 左：检测项目（仅名称，负责增删） */}
-                                    <div className="col-span-4">
-                                        <div className="flex justify-between items-center mb-3">
-                                            <span className="text-sm font-black text-slate-700">
-                                                <ExperimentOutlined className="mr-1 text-blue-500" />检测项目
-                                                <span className="text-slate-400 font-mono text-xs ml-1">({sampleData?.items?.length || 0})</span>
-                                            </span>
-                                            <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setItemModalVisible(true)} disabled={!isEditable} className="rounded-lg font-bold bg-slate-900 border-none">添加项目</Button>
-                                        </div>
-                                        {sampleData?.items?.length > 0 ? (
-                                            <div className="space-y-2">
-                                                {sampleData.items.map(item => (
-                                                    <div key={item.item_id || item.id} className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow">
-                                                        <div className="flex flex-col min-w-0">
-                                                            <span className="font-bold text-slate-800 text-sm truncate">{item.name || item.item_name}</span>
-                                                            <span className="font-mono text-[10px] text-slate-400">#{item.id || item.item_id}</span>
-                                                        </div>
-                                                        {isEditable && (
-                                                            <Popconfirm title="确定移除此检测项吗？" onConfirm={() => handleItemDelete(item.item_id || item.id)} okText="确认删除" cancelText="取消" okButtonProps={{ danger: true }}>
-                                                                <Button type="link" danger icon={<DeleteOutlined />} size="small">删除</Button>
-                                                            </Popconfirm>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="py-10 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center">
-                                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="text-slate-400 text-xs">暂无检测项目</span>} />
-                                            </div>
+                                {/* V3: 检测项目与检测方法合并为统一列表 —— 每张卡片即一个 {item_id, method_id}
+                                    组合，展示其所属检测项目 + 完整生命周期，不再左右分栏 */}
+                                <div>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <span className="text-sm font-black text-slate-700">
+                                            <AuditOutlined className="mr-1 text-indigo-500" />检测项目及方法
+                                            <span className="text-slate-400 font-mono text-xs ml-1">({sampleData?.methods?.length || 0})</span>
+                                        </span>
+                                        {isEditable && (
+                                            <Button size="small" type="primary" icon={<PlusOutlined />} onClick={openConfigModal} className="rounded-lg font-bold bg-slate-900 border-none">分派检测项目及方法</Button>
                                         )}
                                     </div>
-
-                                    {/* 右：检测方法（样品级，完整生命周期与操作） */}
-                                    <div className="col-span-8 border-l border-slate-100 pl-5">
-                                        <div className="flex justify-between items-center mb-3">
-                                            <span className="text-sm font-black text-slate-700">
-                                                <AuditOutlined className="mr-1 text-indigo-500" />检测方法
-                                                <span className="text-slate-400 font-mono text-xs ml-1">({sampleData?.methods?.length || 0})</span>
-                                            </span>
-                                            {isEditable && (
-                                                <Button size="small" type="primary" icon={<PlusOutlined />} onClick={openConfigModal} className="rounded-lg font-bold bg-slate-900 border-none">分派方法</Button>
-                                            )}
-                                        </div>
-                                        {sampleData?.methods?.length > 0 ? (
-                                            <div className="space-y-3">
-                                                {sampleData.methods.map(m => (
-                                                    <div key={m.method_id || m.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow">
-                                                        <div className="flex justify-between items-center gap-2 flex-wrap">
+                                    {sampleData?.methods?.length > 0 ? (
+                                        <div className="space-y-3">
+                                            {sampleData.methods.map(m => (
+                                                <div key={`${m.item_id}-${m.method_id || m.id}`} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow">
+                                                    <div className="flex justify-between items-center gap-2 flex-wrap">
+                                                        <div className="flex flex-col min-w-0">
+                                                            {m.item_name && (
+                                                                <span className="text-sm text-blue-500 font-bold uppercase tracking-wider truncate">{m.item_name}</span>
+                                                            )}
                                                             <div className="font-bold text-slate-800 text-sm">{m.method_name || m.name}</div>
-                                                            <Space wrap size={[4, 4]}>
+                                                        </div>
+                                                        <Space wrap size={[4, 4]}>
                                                                 {!hideDistribute && (
                                                                     distributeType === 'inspector' ? (
                                                                         <Tooltip title={
@@ -835,7 +781,7 @@ const DetailDrawer = ({
                                                                     <Popconfirm
                                                                         title="确定删除此方法吗？"
                                                                         description={`当前状态：${MethodStatusMap[m.status]?.label || "未知"}，删除后其相关数据将一并移除。`}
-                                                                        onConfirm={() => handleMethodDelete(m.method_id || m.id)}
+                                                                        onConfirm={() => handleMethodDelete(m)}
                                                                         okText="确认删除"
                                                                         cancelText="取消"
                                                                         okButtonProps={{ danger: true }}
@@ -926,12 +872,11 @@ const DetailDrawer = ({
                                             </div>
                                         ) : (
                                             <div className="py-10 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center">
-                                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="text-slate-400 text-xs">待分派检测方法</span>} />
+                                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="text-slate-400 text-xs">待分派检测项目及方法</span>} />
                                             </div>
                                         )}
                                     </div>
                                 </div>
-                            </div>
                         )
                     },
                     {
@@ -1014,13 +959,8 @@ const DetailDrawer = ({
                 editingInput={editingInput} 
             />
             
-            <ItemSelectModal 
-                visible={itemModalVisible} 
-                onClose={() => setItemModalVisible(false)} 
-                onSave={handleItemAdd} 
-            />
-
-            {/* V2: 配置弹窗改为样品级方法分派（加工配置已移除，加工任务在方法卡片上单独添加） */}
+            {/* V3: item 与 method 强绑定，配置弹窗改为分派 {item_id, method_id} 组合
+                （加工配置已移除，加工任务在方法卡片上单独添加） */}
             <ItemConfigModal
                 visible={configModalVisible}
                 onClose={() => setConfigModalVisible(false)}
@@ -1047,9 +987,10 @@ const DetailDrawer = ({
                 destroyOnClose
             >
                 <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                    <div className="text-xs text-blue-800">
+                    <div className="text-sm text-blue-800">
                         <p className="font-bold mb-1">正在下发：</p>
-                        {/* V2: 方法上提到样品级，不再展示所属检测项目 */}
+                        {/* V3: item 与 method 强绑定，展示所属检测项目 */}
+                        {selectedDistData?.method?.item_name && <p>检测项目：{selectedDistData.method.item_name}</p>}
                         <p>检测方法：{selectedDistData?.method?.method_name || selectedDistData?.method?.name}</p>
                     </div>
                 </div>
@@ -1098,7 +1039,8 @@ const DetailDrawer = ({
                 <div className="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-100">
                     <div className="text-xs text-purple-800">
                         <p className="font-bold mb-1">主检测员：{selectedHelperData?.method?.tester_name || '未指派'}</p>
-                        {/* V2: 方法上提到样品级，不再展示所属检测项目 */}
+                        {/* V3: item 与 method 强绑定，展示所属检测项目 */}
+                        {selectedHelperData?.method?.item_name && <p>检测项目：{selectedHelperData.method.item_name}</p>}
                         <p>检测方法：{selectedHelperData?.method?.method_name || selectedHelperData?.method?.name}</p>
                     </div>
                 </div>

@@ -42,8 +42,6 @@ import {
     inputCreateDepartmentSample,
     inputUpdateDepartmentSample,
     inputDeleteDepartmentSample,
-    itemCreateDepartmentSample,
-    itemDeleteDepartmentSample,
     methodCreateDepartmentSample,
     methodDeleteDepartmentSample,
     distributeDepartmentSample,
@@ -120,8 +118,7 @@ const DepartmentSampleList = () => {
             inputCreate: inputCreateDepartmentSample,
             inputUpdate: inputUpdateDepartmentSample,
             inputDelete: inputDeleteDepartmentSample,
-            itemCreate: itemCreateDepartmentSample,
-            itemDelete: itemDeleteDepartmentSample,
+            // V3: itemCreate/itemDelete 已删除 —— item 与 method 强绑定，不再有独立的项目分配操作
             methodCreate: methodCreateDepartmentSample,
             methodDelete: methodDeleteDepartmentSample,
             // Enable distribution for department members (Department Head to Inspector)

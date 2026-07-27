@@ -151,7 +151,9 @@ const CrudTable = ({
     }, [filterValues, filterConfig]);
 
     const fetchData = useCallback(
-        async (page, rows, query) => {
+        // preserveSelection: 纯翻页（仅页码变化）时传 true 以保留多选；
+        // 检索/刷新/增删改等场景不传 => 默认清空。
+        async (page, rows, query, preserveSelection = false) => {
             if (!api.read) return;
             setLoading(true);
             try {
@@ -176,10 +178,13 @@ const CrudTable = ({
                     }
 
                     setData(rows);
-                    // Clear any batch selection whenever the dataset reloads
-                    // (pagination, search, refresh, create/update/delete)
-                    setSelectedRowKeys([]);
-                    setSelectedRows([]);
+                    // 默认在数据重载时清空多选（检索/刷新/增删改）；
+                    // 仅纯翻页（preserveSelection）时保留，配合 rowSelection 的
+                    // preserveSelectedRowKeys 让跨页选择得以保留。
+                    if (!preserveSelection) {
+                        setSelectedRowKeys([]);
+                        setSelectedRows([]);
+                    }
                     if (onDataLoaded) onDataLoaded(rows);
                     setPagination((prev) => ({
                         ...prev,
@@ -364,12 +369,15 @@ const CrudTable = ({
     };
 
     const handleTableChange = (page, newPageSize) => {
+        // 仅页码变化（每页条数不变）视为"纯翻页"，此时保留多选；
+        // 改变每页条数会重排数据，按普通重载处理（清空多选）。
+        const pageSizeChanged = newPageSize !== pagination.pageSize;
         setPagination((prev) => ({
             ...prev,
             current: page,
             pageSize: newPageSize,
         }));
-        fetchData(page, newPageSize, filterValue);
+        fetchData(page, newPageSize, filterValue, !pageSizeChanged);
     };
 
     const hasBatch = Array.isArray(batchActions) && batchActions.length > 0;
@@ -408,7 +416,11 @@ const CrudTable = ({
                   setSelectedRowKeys(keys);
                   setSelectedRows(rows);
               },
-              preserveSelectedRowKeys: false,
+              // 跨页保留已选行的 key：服务端分页下别页的行对象由 antd 内部缓存，
+              // onChange 回传的 rows 会包含其它页已选中的完整记录，供批量操作使用。
+              preserveSelectedRowKeys: true,
+              columnWidth: 48,
+              fixed: "left",
           }
         : undefined;
 
@@ -664,6 +676,7 @@ const CrudTable = ({
                     pageSize: pagination.pageSize,
                     showSizeChanger: true,
                     pageSizeOptions: ["10", "20", "50", "100"],
+                    showQuickJumper: true,
                     showTotal: (total, range) =>
                         `显示 ${range[0]}-${range[1]} / 共 ${total} 项`,
                 }}

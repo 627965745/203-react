@@ -46,8 +46,6 @@ import {
     inputCreateSample,
     inputUpdateSample,
     inputDeleteSample,
-    itemCreateSample,
-    itemDeleteSample,
     methodCreateSample,
     methodUpdateSample,
     methodDeleteSample,
@@ -337,8 +335,7 @@ const SampleList = () => {
             inputCreate: inputCreateSample,
             inputUpdate: inputUpdateSample,
             inputDelete: inputDeleteSample,
-            itemCreate: itemCreateSample,
-            itemDelete: itemDeleteSample,
+            // V3: itemCreate/itemDelete 已删除 —— item 与 method 强绑定，不再有独立的项目分配操作
             methodCreate: methodCreateSample,
             methodUpdate: methodUpdateSample,
             methodDelete: methodDeleteSample,

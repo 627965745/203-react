@@ -3,8 +3,8 @@ import { Checkbox, Cascader } from "antd";
 
 // 通用「加工选项」选择器：建议的加工选项（勾选，来自已分派检测方法关联的加工选项）+
 // 全部加工选项（级联下拉），两者共享同一个已选值数组（加工选项 id 列表）。
-// 单独添加（DetailDrawer 的“配置加工任务”弹窗）与批量添加（BatchOperationModal/
-// SampleBatchModal）均使用此组件，保持交互一致。
+// 单独添加（DetailDrawer 的“配置加工任务”弹窗）与批量添加（SampleBatchModal）
+// 均使用此组件，保持交互一致。
 const ProcessingOptionSelector = ({
     value = [],
     onChange,
@@ -85,7 +85,8 @@ const ProcessingOptionSelector = ({
                     onChange={(val) =>
                         onChange(val.map((path) => path[path.length - 1]))
                     }
-                    placeholder="选择加工方法及具体选项"
+                    displayRender={(labels) => labels.join(" / ")}
+                    placeholder="选择方法及选项"
                     className="w-full"
                     showCheckedStrategy="SHOW_CHILD"
                     showSearch

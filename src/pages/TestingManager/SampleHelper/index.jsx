@@ -16,8 +16,8 @@ const { Sider, Content } = Layout;
 
 // 布局参照 WorkflowManager/Sample：左侧任务列表，右侧展示辅助任务。
 //
-// 实测返回数据（SampleHelper/read）中 helpers[] 只有 method_id/method_name/status，
-// 不含 item_id/item_name，因此审批相关请求体也不再传 item_id。
+// V3: item 与 method 强绑定，SampleHelper/read 返回的 helpers[] 新增 item_id/item_name，
+// 审批（approve/reject）请求体的 method_id 相应由 int 改为 {item_id, method_id} 对象。
 //
 // 左侧任务列表不再用 rows:500 一次性反推全部任务 —— 接口本身自带分页且返回 total，
 // 直接按正常页大小（10）翻页展示当前页样品里出现的任务即可。同时新增“全部任务”
@@ -130,15 +130,18 @@ const SampleHelper = () => {
   };
 
   // 展平为“一行一条辅助任务”，不再按样品展开
+  // V3: item 与 method 强绑定，同一 methodId 可能挂在不同 item 下重复出现，key 需带上 item_id
   const flatRows = useMemo(() => {
     const rows = [];
     data.forEach(sample => {
       sample.filteredHelpers.forEach(h => {
         rows.push({
-          key: `${sample.id}-${h.method_id}`,
+          key: `${sample.id}-${h.item_id}-${h.method_id}`,
           sampleId: sample.id,
           lab_code: sample.lab_code,
           task_lab_code: sample.task_lab_code || selectedTask?.lab_code,
+          item_id: h.item_id,
+          item_name: h.item_name,
           method_id: h.method_id,
           method_name: h.method_name,
           status: h.status,
@@ -152,14 +155,15 @@ const SampleHelper = () => {
   const handleApprove = (record) => {
     Modal.confirm({
       title: '确认辅助任务',
-      content: `是否确认样品 ${record.task_lab_code}-${record.lab_code?.toString().padStart(4, '0')} 的 [${record.method_name}] 辅助任务？`,
+      content: `是否确认样品 ${record.task_lab_code}-${record.lab_code?.toString().padStart(4, '0')} 的 [${record.item_name ? `${record.item_name} / ` : ''}${record.method_name}] 辅助任务？`,
       okText: '确认',
       cancelText: '取消',
       onOk: async () => {
         try {
           const res = await approveSampleHelper({
             sample_id: record.sampleId,
-            method_id: record.method_id,
+            // V3: method_id 由 int 改为 {item_id, method_id} 对象
+            method_id: { item_id: record.item_id, method_id: record.method_id },
           });
           if (res.data?.status === 0) {
             message.success('已确认');
@@ -177,7 +181,7 @@ const SampleHelper = () => {
   const handleReject = (record) => {
     Modal.confirm({
       title: '拒绝辅助任务',
-      content: `是否拒绝样品 ${record.task_lab_code}-${record.lab_code?.toString().padStart(4, '0')} 的 [${record.method_name}] 辅助任务？`,
+      content: `是否拒绝样品 ${record.task_lab_code}-${record.lab_code?.toString().padStart(4, '0')} 的 [${record.item_name ? `${record.item_name} / ` : ''}${record.method_name}] 辅助任务？`,
       okText: '确认',
       cancelText: '取消',
       okType: 'danger',
@@ -185,7 +189,8 @@ const SampleHelper = () => {
         try {
           const res = await rejectSampleHelper({
             sample_id: record.sampleId,
-            method_id: record.method_id,
+            // V3: method_id 由 int 改为 {item_id, method_id} 对象
+            method_id: { item_id: record.item_id, method_id: record.method_id },
           });
           if (res.data?.status === 0) {
             message.success('已拒绝');
@@ -270,10 +275,15 @@ const SampleHelper = () => {
       ),
     },
     {
-      title: '检测方法',
+      // V3: item 与 method 强绑定，一并展示所属检测项目
+      title: '检测项目 / 方法',
       dataIndex: 'method_name',
       key: 'method_name',
-      render: (text) => <span className="text-sm font-medium text-slate-700">{text}</span>,
+      render: (text, record) => (
+        <span className="text-sm font-medium text-slate-700">
+          {record.item_name ? `${record.item_name} / ${text}` : text}
+        </span>
+      ),
     },
     {
       title: '状态',

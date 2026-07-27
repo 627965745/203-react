@@ -14,7 +14,8 @@ import { resultCreateTestingSample } from '../../../api/testing';
 import dayjs from 'dayjs';
 import axios from 'axios';
 
-// V2: 结果录入不再需要 itemId —— 结果主键由 (sample_id, item_id, field_id) 变为 (sample_id, field_id)
+// V3: item 与 method 强绑定，结果主键重新变为 (sample_id, item_id, field_id) —— 结果录入需要
+//     带上 item_id（取自 methodData.item_id，即该方法在样品上所归属的检测项目）
 const ResultEntryModal = ({ open, onCancel, onSuccess, methodId, methodName, methodData, sampleData, readOnly = false }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
@@ -112,7 +113,8 @@ const ResultEntryModal = ({ open, onCancel, onSuccess, methodId, methodName, met
                 
                 return resultCreateTestingSample({
                     sample_id: sampleData.id,
-                    // V2: 移除 item_id，结果主键为 (sample_id, field_id)
+                    // V3: 结果主键为 (sample_id, item_id, field_id)，需带上该方法所属的 item_id
+                    item_id: methodData?.item_id,
                     field_id: f.id,
                     value: val != null ? String(val) : ""
                 });

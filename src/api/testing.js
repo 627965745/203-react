@@ -8,8 +8,14 @@ export const exportTestingTask = data => instance.post("/TestingManager/Task/exp
 export const readTestingSample = data => instance.post("/TestingManager/Sample/read", data);
 export const updateTestingSample = data => instance.post("/TestingManager/Sample/update", data);
 export const deleteTestingSample = data => instance.post("/TestingManager/Sample/delete", data);
-export const referenceTestingSample = data => instance.post("/TestingManager/Sample/reference", data);
 export const comboTestingSample = data => instance.post("/TestingManager/Sample/combo", data);
+// V4: 业务逻辑同 WorkflowManager —— task_id 必传；重复样(type=3)必须传 parent_id；
+//     client_code 由后端自动生成
+export const referenceTestingSample = data => instance.post("/TestingManager/Sample/reference", data);
+// V4: 新增接口 —— 按比例(ratio)生成重复样，基于 tester_id 做权限隔离；
+//     检测维度生成的重复样，其方法初始 status=2（已分配检测人）。
+//     task_id 必传：即使已经给了 sample_ids 缩小范围，也要一并带上 task_id。
+export const duplicateTestingSample = data => instance.post("/TestingManager/Sample/duplicate", data);
 
 // Input Parameters (Limited to samples created by current user)
 export const inputCreateTestingSample = data => instance.post("/TestingManager/Sample/inputCreate", data);

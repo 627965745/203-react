@@ -11,6 +11,8 @@ import {
     Tag,
     Table as AntTable,
     Input,
+    Alert,
+    Switch,
 } from "antd";
 import {
     ContainerOutlined,
@@ -23,6 +25,7 @@ import {
     EditOutlined,
     SendOutlined,
     RollbackOutlined,
+    RetweetOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 
@@ -31,13 +34,14 @@ import * as workflowApi from "../../../api/workflow";
 import * as departmentApi from "../../../api/department";
 import * as testingApi from "../../../api/testing";
 import { comboDepartment } from "../../../api/department";
-import { processingOptionTestMethod } from "../../../api/testMethod";
 import { comboProcessingMethod } from "../../../api/processingMethod";
 import { comboUser } from "../../../api/user";
 
 import HorizontalTree from "../HorizontalTree";
 import MethodSelector from "../MethodSelector";
 import ProcessingOptionSelector from "../ProcessingOptionSelector";
+// V4: 生成重复样的比例选择器（滑块 + 输入框），与任务级批量操作共用
+import RatioSelector from "../RatioSelector";
 
 // 求多个样品各自已有 id 列表的交集 —— 只有对全部目标样品都已经添加过的
 // 方法/加工选项，重复添加才是纯粹的无效操作，才需要置灰禁止选择。
@@ -47,6 +51,51 @@ const intersectIds = (samplesList, getIdsForSample) => {
         const idSet = new Set(getIdsForSample(s));
         return acc.filter((id) => idSet.has(id));
     }, getIdsForSample(samplesList[0]));
+};
+
+// 按 module 解析批量操作对应的接口映射。抽成具名导出，供 TaskBatchModal.jsx
+// （任务级批量操作，走 task_id）复用，避免两处各维护一份端点映射。
+export const resolveBatchApi = (module) => {
+    const maps = {
+        workflow: {
+            methodCreate: workflowApi.methodCreateSample,
+            methodDelete: workflowApi.methodDeleteSample,
+            // 需求变更：批量"添加加工"改为批量"配置加工"，统一走 processUpdate（整体覆盖），
+            // 不再用 processCreate —— 批量场景下不区分目标样品当前是否已有加工配置。
+            processUpdate: workflowApi.processUpdateSample,
+            processDelete: workflowApi.processDeleteSample,
+            distribute: workflowApi.distributeSample,
+            approve: workflowApi.approveSample,
+            reject: workflowApi.rejectSample,
+            // V4: 新增"按比例生成重复样"，三个模块各有独立端点（权限隔离维度不同）
+            duplicate: workflowApi.duplicateSample,
+        },
+        department: {
+            methodCreate: departmentApi.methodCreateDepartmentSample,
+            methodDelete: departmentApi.methodDeleteDepartmentSample,
+            processUpdate: null,
+            processDelete: null,
+            distribute: departmentApi.distributeDepartmentSample,
+            approve: departmentApi.approveDepartmentSample,
+            reject: departmentApi.rejectDepartmentSample,
+            rollback: departmentApi.rollbackDepartmentSample,
+            // V4: 部门维度按 department_id 隔离，生成的重复样方法初始 status=1
+            duplicate: departmentApi.duplicateDepartmentSample,
+        },
+        testing: {
+            methodCreate: testingApi.methodCreateTestingSample,
+            methodDelete: testingApi.methodDeleteTestingSample,
+            processUpdate: null,
+            processDelete: null,
+            distribute: null,
+            approve: testingApi.approveTestingSample,
+            reject: testingApi.rollbackTestingSample,
+            resultCreate: testingApi.resultCreateTestingSample,
+            // V4: 检测维度按 tester_id 隔离，生成的重复样方法初始 status=2
+            duplicate: testingApi.duplicateTestingSample,
+        },
+    };
+    return maps[module] || maps.workflow;
 };
 
 // Mirror of DetailDrawer's MethodStatusMap — used to annotate methods when the
@@ -85,6 +134,14 @@ export const getOperations = (module) => {
                 color: "red",
                 leaf: "method",
             },
+            // V4: 新增 —— 按比例生成重复样，只需选样品（或走任务级入口按 task_id 生成）
+            {
+                label: "生成重复样",
+                value: "duplicate",
+                icon: <RetweetOutlined />,
+                color: "orange",
+                leaf: "sample",
+            },
         ];
     } else {
         ops = [
@@ -103,10 +160,13 @@ export const getOperations = (module) => {
                 color: "orange",
                 leaf: "method",
             },
-            // V2: 加工上提到样品级 —— 添加/删除加工都只需选样品
+            // V2: 加工上提到样品级 —— 配置/删除加工都只需选样品。
+            // 需求变更：processDelete 接口不支持按 option 局部删除，传什么 option_ids
+            // 都会清空该样品的全部加工，因此两个操作都不再提供"选项/方法"级别的选择，
+            // leaf 统一为 'sample'——勾选样品即操作对象，不存在"选中部分加工"这回事。
             {
-                label: "批量添加加工",
-                value: "processCreate",
+                label: "批量配置加工",
+                value: "processUpdate",
                 icon: <ToolOutlined />,
                 color: "purple",
                 leaf: "sample",
@@ -116,7 +176,7 @@ export const getOperations = (module) => {
                 value: "processDelete",
                 icon: <DeleteOutlined />,
                 color: "volcano",
-                leaf: "process",
+                leaf: "sample",
             },
             {
                 label: "批量下发",
@@ -138,6 +198,14 @@ export const getOperations = (module) => {
                 icon: <CloseCircleOutlined />,
                 color: "red",
                 leaf: "method",
+            },
+            // V4: 新增 —— 按比例生成重复样，只需选样品（或走任务级入口按 task_id 生成）
+            {
+                label: "生成重复样",
+                value: "duplicate",
+                icon: <RetweetOutlined />,
+                color: "orange",
+                leaf: "sample",
             },
         ];
         if (module === "department") {
@@ -183,16 +251,16 @@ const SampleBatchModal = ({
 
     const [departments, setDepartments] = useState([]);
     const [users, setUsers] = useState([]);
+    // V4: 只保留全量加工选项目录 —— "建议的加工选项"已由后端的 default 参数取代
     const [procOptions, setProcOptions] = useState([]);
-    const [suggestedProcOptions, setSuggestedProcOptions] = useState([]);
     // V3: item 与 method 强绑定，methodCreate 不再需要"建议的/全部"两组方法列表 ——
     // MethodSelector 自行按项目懒加载方法；这里只需算出已对全部目标样品添加过的
     // {item_id, method_id} 组合键（"itemId-methodId"），在选择器里置灰防止重复添加
     const [disabledPairs, setDisabledPairs] = useState([]);
-    // 已对所有目标样品都添加过的加工选项 id —— 在选择器里置灰，防止重复添加
-    const [disabledProcOptionIds, setDisabledProcOptionIds] = useState([]);
 
     const [form] = Form.useForm();
+    // V4: 开启"使用默认加工选项"后，option_ids 不再必填（后端按检测方法自动匹配）
+    const useDefaultProc = Form.useWatch("default", form);
 
     // department/testing modules cannot operate on samples they didn't create
     const isSampleRestricted = (s) => {
@@ -208,8 +276,11 @@ const SampleBatchModal = ({
 
     // Per-sample summary for the no-tree "add" op (methodCreate).
     const sampleSummary = (s) => {
-        if (isSampleRestricted(s))
+        // V4: 生成重复样按 department_id / tester_id 隔离，与"是否本人创建"无关，不置灰
+        if (operation?.value !== "duplicate" && isSampleRestricted(s))
             return { disabled: true, note: " (非本人创建)" };
+        if (operation?.value === "duplicate" && s.type !== 0)
+            return { disabled: true, note: " (非普通样)" };
         return { disabled: false, note: "" };
     };
 
@@ -219,54 +290,41 @@ const SampleBatchModal = ({
         [samples, module],
     );
 
+    // V4: sample 级操作的实际目标集合。生成重复样(duplicate)按 department_id / tester_id
+    //     做权限隔离，而不是按创建人 —— 若沿用 editableSamples，管理组下发的普通样
+    //     （creator_id 为空）会被整体排除，而它们恰恰是最需要复制的对象。
+    //     另外后端只会从中挑出普通样(type=0)，这里同步过滤掉质控样以免误导。
+    const targetSamples = useMemo(() => {
+        if (operation?.value === "duplicate")
+            return samples.filter((s) => s.type === 0 || s.type === undefined);
+        return editableSamples;
+    }, [operation, samples, editableSamples]);
+
     // Resolve APIs based on module
     // V3: itemCreate/itemDelete 已删除，不再出现在这些映射里
-    const api = useMemo(() => {
-        const maps = {
-            workflow: {
-                methodCreate: workflowApi.methodCreateSample,
-                methodDelete: workflowApi.methodDeleteSample,
-                processCreate: workflowApi.processCreateSample,
-                processDelete: workflowApi.processDeleteSample,
-                distribute: workflowApi.distributeSample,
-                approve: workflowApi.approveSample,
-                reject: workflowApi.rejectSample,
-            },
-            department: {
-                methodCreate: departmentApi.methodCreateDepartmentSample,
-                methodDelete: departmentApi.methodDeleteDepartmentSample,
-                processCreate: null,
-                processDelete: null,
-                distribute: departmentApi.distributeDepartmentSample,
-                approve: departmentApi.approveDepartmentSample,
-                reject: departmentApi.rejectDepartmentSample,
-                rollback: departmentApi.rollbackDepartmentSample,
-            },
-            testing: {
-                methodCreate: testingApi.methodCreateTestingSample,
-                methodDelete: testingApi.methodDeleteTestingSample,
-                processCreate: null,
-                processDelete: null,
-                distribute: null,
-                approve: testingApi.approveTestingSample,
-                reject: testingApi.rollbackTestingSample,
-                resultCreate: testingApi.resultCreateTestingSample,
-            },
-        };
-        return maps[module] || maps.workflow;
-    }, [module]);
+    const api = useMemo(() => resolveBatchApi(module), [module]);
 
     // Reset + load auxiliary data whenever the modal opens for an operation
     useEffect(() => {
         if (!open || !operation) return;
         form.resetFields();
 
-        // V3: sample 级操作（methodCreate/processCreate/processDelete）
+        // V3: sample 级操作（methodCreate/processUpdate/processDelete）
         //     直接作用于可操作样品，预置选择；其它操作在树中选择。
+        // V4: duplicate 同为 sample 级操作，目标集合见 targetSamples
         if (operation.leaf === "sample") {
-            setSelections(editableSamples.map((s) => [s.id]));
+            setSelections(targetSamples.map((s) => [s.id]));
         } else {
             setSelections([]);
+        }
+        // V4: 生成重复样默认比例 0.2（后端约束 0 < ratio ≤ 1）；描述不预填，留给用户自己写
+        if (operation.value === "duplicate") {
+            form.setFieldsValue({ ratio: 0.2 });
+        }
+        // V4: 批量配置加工默认打开"使用默认加工选项"，此时 option_ids 可留空，
+        //     由后端按样品已关联的检测方法自动匹配默认加工选项。
+        if (operation.value === "processUpdate") {
+            form.setFieldsValue({ default: true });
         }
 
         const load = async () => {
@@ -277,44 +335,24 @@ const SampleBatchModal = ({
                     //     这里只需算出已对全部目标样品添加过的 {item_id, method_id} 组合键
                     setDisabledPairs(
                         intersectIds(editableSamples, (s) =>
-                            (s.methods || []).map((m) => `${m.item_id}-${m.method_id || m.id}`),
-                        ),
-                    );
-                } else if (operation.value === "processCreate") {
-                    // 建议的加工选项：来自可操作样品已分派方法关联的加工选项；全部加工选项：comboProcessingMethod
-                    // V3: 直接按已分派方法的 method_id 查 TestMethod/processingOption，
-                    //     不再经由 item_id -> TestItem/method 间接推导
-                    const assignedMethodIds = Array.from(
-                        new Set(
-                            editableSamples.flatMap((s) =>
-                                (s.methods || []).map(
-                                    (m) => m.method_id || m.id,
-                                ),
+                            (s.methods || []).map(
+                                (m) => `${m.item_id}-${m.method_id || m.id}`,
                             ),
                         ),
                     );
-                    const [optionsRes, allProcRes] = await Promise.all([
-                        assignedMethodIds.length
-                            ? processingOptionTestMethod({ ids: assignedMethodIds })
-                            : Promise.resolve({ data: { data: [] } }),
+                } else if (operation.value === "processUpdate") {
+                    // 需求变更：批量配置加工是整体覆盖（processUpdate），不是新增，所以不再计算
+                    // "已对全部目标样品添加过的选项"并置灰——覆盖语义下，已有的选项也应该能
+                    // 被重新选中（否则反而无法在新配置里保留它）。
+                    // V4: 不再按已分派方法查 TestMethod/processingOption 推荐"建议的加工选项" ——
+                    //     默认加工选项由后端在 processUpdate 时按 default 参数自动匹配，
+                    //     前端只需提供全量选项目录供手动补充，以及加工人下拉。
+                    const [allProcRes, userRes] = await Promise.all([
                         comboProcessingMethod(),
+                        comboUser(),
                     ]);
-                    // V3: processingOption 响应按 method 分组 [{ id(=method_id), processing_options: [...] }]，
-                    //     需要展开每个元素的 processing_options 再按 id 去重
-                    const suggestedMap = new Map();
-                    (optionsRes.data.data || []).forEach((m) =>
-                        (m.processing_options || []).forEach((opt) =>
-                            suggestedMap.set(opt.id, opt),
-                        ),
-                    );
-                    setSuggestedProcOptions(Array.from(suggestedMap.values()));
+                    setUsers(userRes.data.data || []);
                     setProcOptions(allProcRes.data.data || []);
-                    // 已对全部目标样品添加过的加工选项 —— 置灰
-                    setDisabledProcOptionIds(
-                        intersectIds(editableSamples, (s) =>
-                            (s.processing || []).map((p) => p.option_id || p.id),
-                        ),
-                    );
                 } else if (operation.value === "distribute") {
                     if (module === "workflow") {
                         const res = await comboDepartment();
@@ -331,16 +369,24 @@ const SampleBatchModal = ({
             }
         };
         load();
-    }, [open, operation, samples, module, form, editableSamples]);
+    }, [
+        open,
+        operation,
+        samples,
+        module,
+        form,
+        editableSamples,
+        targetSamples,
+    ]);
 
     const labCodeOf = (s) =>
         `${task?.lab_code || ""}-${s.lab_code?.toString().padStart(4, "0")}`;
 
-    // V3: 树状选择数据。仅 leaf 为 'process'(样品>加工选项) 或 'method'(样品>项目>方法) 时使用。
-    //     item 与 method 强绑定，'method' 现为三级：样品 > 检测项目 > 检测方法。
+    // V3: 树状选择数据。仅 leaf 为 'method'(样品>项目>方法) 时使用 —— 'sample' 级操作
+    //     （含加工的配置/删除）不用树，见上方 getOperations 的注释。
+    //     item 与 method 强绑定，'method' 为三级：样品 > 检测项目 > 检测方法。
     const treeData = useMemo(() => {
         if (!operation || operation.leaf === "sample") return [];
-        const leaf = operation.leaf;
         return samples.map((s) => {
             const fullLabCode = labCodeOf(s);
 
@@ -362,28 +408,22 @@ const SampleBatchModal = ({
             // V2: 加工状态读取样品级
             const sampleProcessing = s.processing_status === 1;
 
-            let childNodes = [];
-            if (leaf === "process") {
-                childNodes = (s.processing || []).map((p) => {
-                    return {
-                        label: p.method_name + (p.value ? ` - ${p.value}` : ''),
-                        value: p.option_id || p.id,
-                        disabled: isSelfRestrictDisabled,
-                    };
-                });
-            } else {
-                // leaf === 'method' —— 样品 > 检测项目 > 检测方法（V3: item 与 method 强绑定）
-                // 先按 item_id 分组，方法节点挂在其所属项目节点下
-                const itemGroups = new Map(); // item_id -> { itemName, methods: [] }
-                (s.methods || []).forEach((m) => {
-                    const itemId = m.item_id;
-                    if (!itemGroups.has(itemId)) {
-                        itemGroups.set(itemId, { itemName: m.item_name, methods: [] });
-                    }
-                    itemGroups.get(itemId).methods.push(m);
-                });
+            // leaf === 'method' —— 样品 > 检测项目 > 检测方法（V3: item 与 method 强绑定）
+            // 先按 item_id 分组，方法节点挂在其所属项目节点下
+            const itemGroups = new Map(); // item_id -> { itemName, methods: [] }
+            (s.methods || []).forEach((m) => {
+                const itemId = m.item_id;
+                if (!itemGroups.has(itemId)) {
+                    itemGroups.set(itemId, {
+                        itemName: m.item_name,
+                        methods: [],
+                    });
+                }
+                itemGroups.get(itemId).methods.push(m);
+            });
 
-                childNodes = Array.from(itemGroups.entries()).map(([itemId, group]) => {
+            const childNodes = Array.from(itemGroups.entries()).map(
+                ([itemId, group]) => {
                     const methodNodes = group.methods.map((m) => {
                         let isDisabled = false;
                         let reason = "";
@@ -394,7 +434,10 @@ const SampleBatchModal = ({
                             if (sampleProcessing) {
                                 isDisabled = true;
                                 reason = " (加工未完成)";
-                            } else if (module === "workflow" && m.status !== 0) {
+                            } else if (
+                                module === "workflow" &&
+                                m.status !== 0
+                            ) {
                                 isDisabled = true;
                                 reason = " (状态非待下发)";
                             } else if (
@@ -441,8 +484,8 @@ const SampleBatchModal = ({
                         children: methodNodes,
                         disabled: methodNodes.every((n) => n.disabled),
                     };
-                });
-            }
+                },
+            );
 
             // 空占位：让每个被选样品都在树中出现
             if (childNodes.length === 0) {
@@ -452,7 +495,7 @@ const SampleBatchModal = ({
                     disabled: isSampleDisabled,
                     children: [
                         {
-                            label: leaf === "process" ? "未配置加工" : "未分配检测项目及方法",
+                            label: "未分配检测项目及方法",
                             value: `__empty_${s.id}`,
                             checkable: false,
                         },
@@ -478,8 +521,12 @@ const SampleBatchModal = ({
             message.warning("请至少选择一项内容");
             return;
         }
-        if (operation.leaf === "sample" && editableSamples.length === 0) {
-            message.warning("没有可操作的样品");
+        if (operation.leaf === "sample" && targetSamples.length === 0) {
+            message.warning(
+                operation.value === "duplicate"
+                    ? "所选样品中没有普通样，无法生成重复样"
+                    : "没有可操作的样品",
+            );
             return;
         }
 
@@ -487,8 +534,15 @@ const SampleBatchModal = ({
         try {
             if (operation.value === "methodCreate")
                 await form.validateFields(["method_ids"]);
-            else if (operation.value === "processCreate")
-                await form.validateFields(["option_ids", "deadline"]);
+            else if (operation.value === "processUpdate")
+                // V4: 加工人必填；option_ids 仅在未启用"默认加工选项"时必填（见下方校验规则）
+                await form.validateFields([
+                    "processor_id",
+                    "option_ids",
+                    "deadline",
+                ]);
+            else if (operation.value === "duplicate")
+                await form.validateFields(["ratio"]);
             else if (operation.value === "distribute")
                 await form.validateFields([
                     module === "workflow" ? "department_id" : "tester_id",
@@ -515,8 +569,10 @@ const SampleBatchModal = ({
                         }),
                     );
                 }
-            } else if (operation.value === "processCreate") {
+            } else if (operation.value === "processUpdate") {
                 // V2: 加工上提到样品级，移除 item_ids
+                // 需求变更：批量配置加工整体覆盖所选样品的加工配置（processUpdate），
+                // 而非在原有基础上新增
                 const optionIds =
                     details.option_ids?.map((path) =>
                         Array.isArray(path) ? path[path.length - 1] : path,
@@ -524,40 +580,51 @@ const SampleBatchModal = ({
                 const deadline = details.deadline
                     ? details.deadline.format("YYYY-MM-DD")
                     : null;
-                const sampleIds = editableSamples.map((s) => s.id);
-                if (sampleIds.length && optionIds.length) {
+                const sampleIds = targetSamples.map((s) => s.id);
+                // V4: 新增 processor_id（加工人）与 default（使用默认加工选项）。
+                //     后端要求 processor_id + deadline + (default 或 option_ids 非空)
+                //     三者同时满足才会置为加工中，否则会清空加工 —— 这里也按同样的
+                //     条件把关，避免"以为配置成功、实际被清空"。
+                const useDefault = !!details.default;
+                if (sampleIds.length && (useDefault || optionIds.length)) {
                     promises.push(
-                        api.processCreate({
+                        api.processUpdate({
                             sample_ids: sampleIds,
+                            processor_id: details.processor_id,
+                            default: useDefault,
                             option_ids: optionIds,
                             deadline,
                         }),
                     );
                 }
-            } else if (operation.value === "processDelete") {
-                const sampleProcessMap = {};
-                selections.forEach((path) => {
-                    const sid = path[0],
-                        oid = path[1];
-                    if (sid && oid) {
-                        if (!sampleProcessMap[sid]) sampleProcessMap[sid] = new Set();
-                        sampleProcessMap[sid].add(oid);
-                    }
-                });
-                const processSetMap = {};
-                Object.entries(sampleProcessMap).forEach(([sid, processSet]) => {
-                    const key = Array.from(processSet).sort().join(",");
-                    if (!processSetMap[key]) processSetMap[key] = [];
-                    processSetMap[key].push(Number(sid));
-                });
-                Object.entries(processSetMap).forEach(([processKey, sids]) =>
+            } else if (operation.value === "duplicate") {
+                // V4: 按比例从所选普通样(type=0)复制生成重复样(type=3)，
+                //     client_code 与父样品关联由后端处理，前端只传范围与比例。
+                //     task_id 是必传项 —— 即使已经给了 sample_ids 也要一并带上。
+                const sampleIds = targetSamples.map((s) => s.id);
+                if (!task?.id) {
+                    message.warning("缺少所属任务，无法生成重复样");
+                    setLoading(false);
+                    return;
+                }
+                if (sampleIds.length) {
                     promises.push(
-                        api.processDelete({
-                            sample_ids: sids,
-                            option_ids: processKey.split(",").map(Number),
+                        api.duplicate({
+                            task_id: task.id,
+                            sample_ids: sampleIds,
+                            ratio: details.ratio,
+                            description: details.description || "",
                         }),
-                    ),
-                );
+                    );
+                }
+            } else if (operation.value === "processDelete") {
+                // 需求变更：processDelete 接口不支持按 option 局部删除——传入的 option_ids
+                // 会被忽略，直接清空该样品的全部加工，因此这里不再收集/传 option_ids，
+                // 一次请求清空所有可操作样品的加工配置即可。
+                const sampleIds = editableSamples.map((s) => s.id);
+                if (sampleIds.length) {
+                    promises.push(api.processDelete({ sample_ids: sampleIds }));
+                }
             } else if (operation.value === "resultEntry") {
                 if (details.results) {
                     Object.entries(details.results).forEach(
@@ -643,8 +710,8 @@ const SampleBatchModal = ({
 
     if (!operation) return null;
 
-    // V3: leaf 为 'sample' 的操作(methodCreate/processCreate/processDelete)
-    //     直接作用于所选样品，不用树；'process'/'method' 操作用树选择。
+    // V3: leaf 为 'sample' 的操作(methodCreate/processUpdate/processDelete)
+    //     直接作用于所选样品，不用树；'method' 操作用树选择。
     const isSampleLevel = operation.leaf === "sample";
     const showTree = !isSampleLevel;
 
@@ -752,9 +819,7 @@ const SampleBatchModal = ({
                     ) : showTree ? (
                         <div className="mb-4">
                             <div className="text-sm font-black text-slate-700 mb-2">
-                                {operation.value === "processCreate"
-                                    ? "选择目标项目"
-                                    : "选择要操作的内容"}
+                                选择要操作的内容
                             </div>
                             <HorizontalTree
                                 data={treeData}
@@ -777,7 +842,10 @@ const SampleBatchModal = ({
                                     </span>
                                 }
                                 rules={[
-                                    { required: true, message: "请选择检测项目及方法" },
+                                    {
+                                        required: true,
+                                        message: "请选择检测项目及方法",
+                                    },
                                 ]}
                             >
                                 <MethodSelector disabledPairs={disabledPairs} />
@@ -785,27 +853,77 @@ const SampleBatchModal = ({
                         </>
                     )}
 
-                    {operation.value === "processCreate" && (
+                    {operation.value === "processUpdate" && (
                         <>
                             <Divider className="my-3" />
+                            {/* V4: 提示压成单行，去掉与标题重复的 description */}
+                            <Alert
+                                type="warning"
+                                showIcon
+                                className="mb-3 rounded-lg text-xs"
+                                message="整体覆盖所选样品当前的加工人、加工方法与选项（非追加）。"
+                            />
+                            {/* V4: 加工人必填 —— 只有指定了 processor_id，样品才会进入
+                                该加工人的「加工管理」任务/样品列表 */}
+                            <Form.Item
+                                name="processor_id"
+                                label={
+                                    <span className="font-black text-slate-700">
+                                        加工人
+                                    </span>
+                                }
+                                tooltip="样品将进入该加工人的「加工管理」列表，由其完成加工并审批"
+                                rules={[
+                                    { required: true, message: "请选择加工人" },
+                                ]}
+                            >
+                                <Select
+                                    placeholder="请选择加工人"
+                                    options={users.map((u) => ({
+                                        label: u.nickname || u.name,
+                                        value: u.id,
+                                    }))}
+                                    showSearch
+                                    optionFilterProp="label"
+                                    className="w-full"
+                                />
+                            </Form.Item>
+                            {/* V4: default=true 时后端按样品已关联的检测方法自动匹配默认
+                                加工选项，与手动勾选的 option_ids 至少二选一 */}
+                            <Form.Item
+                                name="default"
+                                valuePropName="checked"
+                                label={
+                                    <span className="font-black text-slate-700">
+                                        使用默认加工选项
+                                    </span>
+                                }
+                                tooltip="开启后由系统按样品已关联的检测方法自动匹配默认加工选项；关闭则必须在下方手动选择"
+                            >
+                                <Switch />
+                            </Form.Item>
                             <Form.Item
                                 name="option_ids"
                                 label={
                                     <span className="font-black text-slate-700">
                                         选择加工方法及选项
+                                        {useDefaultProc && (
+                                            <span className="ml-2 text-[11px] font-bold text-slate-400">
+                                                （已启用默认选项，可留空）
+                                            </span>
+                                        )}
                                     </span>
                                 }
                                 rules={[
                                     {
-                                        required: true,
-                                        message: "请选择加工选项",
+                                        required: !useDefaultProc,
+                                        message:
+                                            "请选择加工选项，或开启「使用默认加工选项」",
                                     },
                                 ]}
                             >
                                 <ProcessingOptionSelector
-                                    suggestedOptions={suggestedProcOptions}
                                     allOptions={procOptions}
-                                    disabledIds={disabledProcOptionIds}
                                 />
                             </Form.Item>
                             <Form.Item
@@ -828,6 +946,82 @@ const SampleBatchModal = ({
                                     }
                                 />
                             </Form.Item>
+                        </>
+                    )}
+
+                    {/* V4: 按比例生成重复样 —— 后端从所选普通样(type=0)按 ratio 向上取整
+                        计算需复制的方法数，生成 type=3 的重复样并自动关联父样品 */}
+                    {operation.value === "duplicate" && (
+                        <>
+                            <Divider className="my-3" />
+                            {/* V4: 提示压成单行，只保留会影响操作结果的信息（有效目标数） */}
+                            <Alert
+                                type="info"
+                                showIcon
+                                className="mb-3 rounded-lg text-xs"
+                                message={`仅复制普通样，质控样将被忽略；当前有效目标 ${targetSamples.length} 个，方法数按比例向上取整。`}
+                            />
+                            <Form.Item
+                                name="ratio"
+                                label={
+                                    <span className="font-black text-slate-700">
+                                        重复比例
+                                    </span>
+                                }
+                                tooltip="拖动滑块或直接填写百分比（可带小数），例如 20% 表示按 20% 的检测方法生成重复样；发给接口的仍是 0~1 的小数"
+                                rules={[
+                                    {
+                                        required: true,
+                                        message: "请输入重复比例",
+                                    },
+                                    {
+                                        // 后端约束是开区间下限（0 < ratio ≤ 1），
+                                        // async-validator 的 min 是闭区间，这里自行校验。
+                                        // V4: 界面是百分比，提示也按百分比措辞
+                                        validator: (_, v) =>
+                                            v === undefined ||
+                                            v === null ||
+                                            (v > 0 && v <= 1)
+                                                ? Promise.resolve()
+                                                : Promise.reject(
+                                                      new Error(
+                                                          "比例需大于 0% 且不超过 100%",
+                                                      ),
+                                                  ),
+                                    },
+                                ]}
+                            >
+                                {/* V4: 滑块快速选比例 + 输入框精确输入，共享同一个值 */}
+                                <RatioSelector />
+                            </Form.Item>
+                            <Form.Item
+                                name="description"
+                                label={
+                                    <span className="font-black text-slate-700">
+                                        描述
+                                    </span>
+                                }
+                            >
+                                <Input.TextArea
+                                    rows={2}
+                                    maxLength={255}
+                                    showCount
+                                    placeholder="生成的重复样备注（可留空）"
+                                />
+                            </Form.Item>
+                        </>
+                    )}
+
+                    {operation.value === "processDelete" && (
+                        <>
+                            <Divider className="my-3" />
+                            {/* V4: 提示压成单行 */}
+                            <Alert
+                                type="error"
+                                showIcon
+                                className="mb-1 rounded-lg text-xs"
+                                message="不支持只删部分选项：将清空所选样品的加工人与全部加工选项，且不可恢复。"
+                            />
                         </>
                     )}
 

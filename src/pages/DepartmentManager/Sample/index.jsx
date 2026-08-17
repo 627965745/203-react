@@ -11,6 +11,7 @@ import {
     Empty,
     Spin,
     Divider,
+    Dropdown,
 } from "antd";
 import {
     BarcodeOutlined,
@@ -29,6 +30,7 @@ import {
     FileSearchOutlined,
     ExportOutlined,
     MenuUnfoldOutlined,
+    DownOutlined,
 } from "@ant-design/icons";
 import CrudTable from "../../../components/CrudTable";
 import {
@@ -38,7 +40,6 @@ import {
     comboDepartmentSample,
     updateDepartmentSample,
     deleteDepartmentSample,
-    referenceDepartmentSample,
     inputCreateDepartmentSample,
     inputUpdateDepartmentSample,
     inputDeleteDepartmentSample,
@@ -50,12 +51,14 @@ import {
     approveDepartmentSample,
     rejectDepartmentSample,
     rollbackDepartmentSample,
+    referenceDepartmentSample,
 } from "../../../api/department";
 import { comboUser } from "../../../api/user";
 import { comboReferenceMaterial } from "../../../api/referenceMaterial";
 import SampleBatchModal, {
     getOperations,
 } from "../../../components/SampleManager/modals/SampleBatchModal";
+import TaskBatchModal from "../../../components/SampleManager/modals/TaskBatchModal";
 import AddEdit from "../../../components/SampleManager/AddEdit";
 import DetailDrawer from "../../../components/SampleManager/DetailDrawer";
 import SpecialSampleModal from "../../../components/SampleManager/modals/SpecialSampleModal";
@@ -92,6 +95,10 @@ const DepartmentSampleList = () => {
     const [activeOp, setActiveOp] = useState(null);
     const [batchSamples, setBatchSamples] = useState([]);
 
+    // Task-wide batch operation modal (acts on task_id directly, no row selection)
+    const [taskBatchModalOpen, setTaskBatchModalOpen] = useState(false);
+    const [activeTaskOp, setActiveTaskOp] = useState(null);
+
     const batchActions = useMemo(
         () =>
             getOperations("department").map((op) => ({
@@ -107,6 +114,20 @@ const DepartmentSampleList = () => {
                     setBatchSamples(rows);
                     setBatchModalOpen(true);
                 },
+            })),
+        [],
+    );
+
+    const taskBatchMenuItems = useMemo(
+        () =>
+            getOperations("department").map((op) => ({
+                key: op.value,
+                label: op.label,
+                icon: op.icon,
+                danger:
+                    op.value.includes("Delete") ||
+                    op.value === "reject" ||
+                    op.value === "rollback",
             })),
         [],
     );
@@ -132,9 +153,8 @@ const DepartmentSampleList = () => {
             rejectMethod: rejectDepartmentSample,
             rollback: rollbackDepartmentSample,
 
-            // Special sample APIs
-            referenceSample: referenceDepartmentSample,
             comboTask: readDepartmentTask, // Use this for selection if no combo available
+            referenceSample: referenceDepartmentSample,
             comboReferenceMaterial: comboReferenceMaterial,
             onSuccess: () => setRefreshKey((prev) => prev + 1),
         }),
@@ -220,6 +240,15 @@ const DepartmentSampleList = () => {
         }
     };
 
+    const formatSampleCode = (code, taskCode) => {
+        if (!code) return "";
+        const str = String(code);
+        if (str.includes("-")) return str;
+        const prefix = taskCode || selectedTask?.lab_code;
+        const seq = str.padStart(4, "0");
+        return prefix ? `${prefix}-${seq}` : seq;
+    };
+
     const columns = useMemo(
         () => [
             {
@@ -231,8 +260,7 @@ const DepartmentSampleList = () => {
                     <div className="flex items-center gap-2">
                         <BarcodeOutlined className="text-blue-500" />
                         <span className="font-mono font-bold text-blue-600">
-                            {selectedTask?.lab_code}-
-                            {text?.toString().padStart(4, "0")}
+                            {formatSampleCode(text, record.task_lab_code)}
                         </span>
                         {record.description && (
                             <Tooltip title={record.description}>
@@ -243,19 +271,38 @@ const DepartmentSampleList = () => {
                 ),
             },
             {
+                // V4: 质控样的 client_code 由后端自动生成、对用户没有意义，本列不显示它 ——
+                //     类型标签之后同一行接上标准样的标准物质名称、重复样的父样品编号。
                 title: "样品类型",
                 dataIndex: "type",
-                width: 120,
-                render: (type) => {
+                width: 150,
+                render: (type, record) => {
                     const cfg = SampleTypeMap[type] || SampleTypeMap[0];
                     return (
-                        <Tag
-                            icon={cfg.icon}
-                            color={cfg.color}
-                            className="border-none font-bold"
-                        >
-                            {cfg.label}
-                        </Tag>
+                        <div className="flex items-center gap-1.5 whitespace-nowrap">
+                            <Tag
+                                icon={cfg.icon}
+                                color={cfg.color}
+                                className="border-none font-bold m-0"
+                            >
+                                {cfg.label}
+                            </Tag>
+                            {type === 3 && record.parent_lab_code && (
+                                <span className="text-[12px] text-orange-400 font-mono">
+                                    ←{" "}
+                                    {formatSampleCode(
+                                        record.parent_lab_code,
+                                        record.task_lab_code,
+                                    )}
+                                </span>
+                            )}
+                            {type === 2 && record.reference_material_name && (
+                                <span className="text-[12px] text-purple-600 font-bold flex items-center gap-1">
+                                    <StarOutlined />
+                                    {record.reference_material_name}
+                                </span>
+                            )}
+                        </div>
                     );
                 },
             },
@@ -385,14 +432,6 @@ const DepartmentSampleList = () => {
         <Layout className="bg-white h-[calc(100vh-120px)] overflow-hidden">
             <style>{`
                 .task-drawer .ant-drawer-body { padding: 0; }
-                .sample-table-container .ant-spin-nested-loading,
-                .sample-table-container .ant-spin-container {
-                    flex: 1;
-                    display: flex;
-                    flex-direction: column;
-                    overflow: hidden;
-                }
-
             `}</style>
 
             <Content className="bg-white flex flex-col h-full overflow-hidden">
@@ -455,6 +494,25 @@ const DepartmentSampleList = () => {
                                 >
                                     导出结果
                                 </Button>
+                                <Dropdown
+                                    trigger={["click"]}
+                                    menu={{
+                                        items: taskBatchMenuItems,
+                                        onClick: ({ key }) => {
+                                            const op = getOperations(
+                                                "department",
+                                            ).find((o) => o.value === key);
+                                            if (op) {
+                                                setActiveTaskOp(op);
+                                                setTaskBatchModalOpen(true);
+                                            }
+                                        },
+                                    }}
+                                >
+                                    <Button className="rounded-xl font-bold border-blue-100 text-blue-600 bg-blue-50">
+                                        批量操作此任务 <DownOutlined />
+                                    </Button>
+                                </Dropdown>
                                 <Button
                                     type="primary"
                                     className="bg-blue-600 border-none shadow-lg shadow-blue-200 font-bold px-6 rounded-xl"
@@ -468,9 +526,9 @@ const DepartmentSampleList = () => {
                         </div>
 
                         <div className="p-6 flex-1 overflow-hidden sample-table-container">
-                            <div className="bg-white h-full rounded-3xl overflow-y-auto flex flex-col">
+                            <div className="bg-white h-full rounded-3xl overflow-hidden flex flex-col">
                                 <CrudTable
-                                    className="min-h-0 pb-6"
+                                    className="min-h-0 "
                                     refreshKey={refreshKey}
                                     title={
                                         <div className="flex items-center gap-3">
@@ -494,23 +552,19 @@ const DepartmentSampleList = () => {
                                     initialValues={initialValues}
                                     modalWidth={500}
                                     hideAdd={true}
+                                    actionExtra={
+                                        <Button
+                                            icon={<ExperimentOutlined />}
+                                            onClick={() =>
+                                                setSpecialSampleVisible(true)
+                                            }
+                                            className="rounded-xl font-bold border-purple-100 text-purple-600 bg-purple-50"
+                                        >
+                                            添加特殊样品
+                                        </Button>
+                                    }
                                     batchActions={batchActions}
                                     batchDropdown
-                                    actionExtra={
-                                        <Space>
-                                            <Button
-                                                icon={<ExperimentOutlined />}
-                                                onClick={() =>
-                                                    setSpecialSampleVisible(
-                                                        true,
-                                                    )
-                                                }
-                                                className="rounded-xl font-bold border-purple-100 text-purple-600 bg-purple-50"
-                                            >
-                                                添加特殊样品
-                                            </Button>
-                                        </Space>
-                                    }
                                     renderActions={renderActions}
                                     isRecordEditable={(record) => {
                                         return (
@@ -521,7 +575,7 @@ const DepartmentSampleList = () => {
                                         );
                                     }}
                                     onDataLoaded={setSamples}
-                                    scroll={{ y: "calc(100vh - 320px)" }}
+                                    fillHeight
                                 />
                             </div>
                         </div>
@@ -585,6 +639,18 @@ const DepartmentSampleList = () => {
                 task={selectedTask}
                 onSuccess={() => {
                     setBatchModalOpen(false);
+                    setRefreshKey((prev) => prev + 1);
+                }}
+            />
+
+            <TaskBatchModal
+                open={taskBatchModalOpen}
+                onCancel={() => setTaskBatchModalOpen(false)}
+                operation={activeTaskOp}
+                taskId={taskId}
+                module="department"
+                onSuccess={() => {
+                    setTaskBatchModalOpen(false);
                     setRefreshKey((prev) => prev + 1);
                 }}
             />

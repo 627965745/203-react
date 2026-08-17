@@ -58,7 +58,7 @@ const ItemConfigModal = ({
             onCancel={onClose}
             footer={null}
             centered
-            width={800}
+            width={840}
             destroyOnClose
         >
             <div className="py-4">
@@ -118,11 +118,14 @@ const ItemConfigModal = ({
                                                         )}
                                                     </div>
                                                 </div>
+                                                {/* V4: methodCreate 没有 deadline 字段，read 里方法只带 created_at，
+                                                    test_deadline 要下发后才有 —— 这里改为展示分派日期，
+                                                    不再显示"未下发（暂无期限）/完成期限" */}
                                                 <div className="text-right flex flex-col items-end gap-1">
                                                     <span className="text-slate-500 font-mono text-[12px] font-bold">
-                                                        {m.status === 0 ? '未下发（暂无期限）' : (m.test_deadline || '未设定完成期限')}
+                                                        {m.created_at ? m.created_at.split(' ')[0] : '-'}
                                                     </span>
-                                                    <span className="text-[11px] text-slate-500 uppercase tracking-tighter">完成期限</span>
+                                                    <span className="text-[11px] text-slate-500 uppercase tracking-tighter">分派日期</span>
                                                 </div>
                                             </div>
                                             <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-50">

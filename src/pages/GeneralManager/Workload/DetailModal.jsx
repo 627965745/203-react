@@ -98,10 +98,10 @@ const DetailModal = ({ open, record, onCancel }) => {
                     hideSearch
                     hideAction
                     scroll={{ y: 360 }}
+                    defaultPageSize={10}
                     tableProps={{
                         rowKey: "reporting",
                         size: "middle",
-                        pagination: { pageSize: 10 },
                     }}
                 />
             </div>

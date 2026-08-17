@@ -11,6 +11,7 @@ import {
     Empty,
     Spin,
     Divider,
+    Dropdown,
 } from "antd";
 import {
     BarcodeOutlined,
@@ -32,6 +33,7 @@ import {
     EditOutlined,
     DownloadOutlined,
     UploadOutlined,
+    DownOutlined,
 } from "@ant-design/icons";
 import CrudTable from "../../../components/CrudTable";
 import {
@@ -41,7 +43,6 @@ import {
     comboTestingSample,
     updateTestingSample,
     deleteTestingSample,
-    referenceTestingSample,
     inputCreateTestingSample,
     inputUpdateTestingSample,
     inputDeleteTestingSample,
@@ -50,15 +51,17 @@ import {
     approveTestingSample,
     rollbackTestingSample,
     templateTestingSample,
+    referenceTestingSample,
 } from "../../../api/testing";
 import { comboReferenceMaterial } from "../../../api/referenceMaterial";
 
 import AddEdit from "../../../components/SampleManager/AddEdit";
 import DetailDrawer from "../../../components/SampleManager/DetailDrawer";
-import SpecialSampleModal from "../../../components/SampleManager/modals/SpecialSampleModal";
 import SampleBatchModal, {
     getOperations,
 } from "../../../components/SampleManager/modals/SampleBatchModal";
+import TaskBatchModal from "../../../components/SampleManager/modals/TaskBatchModal";
+import SpecialSampleModal from "../../../components/SampleManager/modals/SpecialSampleModal";
 import DownloadTemplateModal from "./DownloadTemplateModal";
 import UploadDataModal from "./UploadDataModal";
 
@@ -87,14 +90,18 @@ const TestingSampleList = () => {
     // Sample Management states
     const [detailVisible, setDetailVisible] = useState(false);
     const [activeSampleId, setActiveSampleId] = useState(null);
-    const [specialSampleVisible, setSpecialSampleVisible] = useState(false);
     const [downloadModalVisible, setDownloadModalVisible] = useState(false);
     const [uploadModalVisible, setUploadModalVisible] = useState(false);
+    const [specialSampleVisible, setSpecialSampleVisible] = useState(false);
 
     // Batch operation modal (samples selected in the table drive it)
     const [batchModalOpen, setBatchModalOpen] = useState(false);
     const [activeOp, setActiveOp] = useState(null);
     const [batchSamples, setBatchSamples] = useState([]);
+
+    // Task-wide batch operation modal (acts on task_id directly, no row selection)
+    const [taskBatchModalOpen, setTaskBatchModalOpen] = useState(false);
+    const [activeTaskOp, setActiveTaskOp] = useState(null);
 
     const batchActions = useMemo(
         () =>
@@ -108,6 +115,17 @@ const TestingSampleList = () => {
                     setBatchSamples(rows);
                     setBatchModalOpen(true);
                 },
+            })),
+        [],
+    );
+
+    const taskBatchMenuItems = useMemo(
+        () =>
+            getOperations("testing").map((op) => ({
+                key: op.value,
+                label: op.label,
+                icon: op.icon,
+                danger: op.value === "reject",
             })),
         [],
     );
@@ -130,11 +148,10 @@ const TestingSampleList = () => {
             approve: approveTestingSample,
             rollback: rollbackTestingSample,
 
-            // Special sample APIs
-            referenceSample: referenceTestingSample,
             comboTask: readTestingTask,
-            comboReferenceMaterial: comboReferenceMaterial,
             templateSample: templateTestingSample,
+            referenceSample: referenceTestingSample,
+            comboReferenceMaterial: comboReferenceMaterial,
             onSuccess: () => setRefreshKey((prev) => prev + 1),
         }),
         [],
@@ -215,6 +232,15 @@ const TestingSampleList = () => {
         }
     };
 
+    const formatSampleCode = (code, taskCode) => {
+        if (!code) return "";
+        const str = String(code);
+        if (str.includes("-")) return str;
+        const prefix = taskCode || selectedTask?.lab_code;
+        const seq = str.padStart(4, "0");
+        return prefix ? `${prefix}-${seq}` : seq;
+    };
+
     const columns = useMemo(
         () => [
             {
@@ -226,8 +252,7 @@ const TestingSampleList = () => {
                     <div className="flex items-center gap-2">
                         <BarcodeOutlined className="text-blue-500" />
                         <span className="font-mono font-bold text-blue-600">
-                            {record.task_lab_code || selectedTask?.lab_code}-
-                            {text?.toString().padStart(4, "0")}
+                            {formatSampleCode(text, record.task_lab_code)}
                         </span>
                         {record.description && (
                             <Tooltip title={record.description}>
@@ -238,19 +263,38 @@ const TestingSampleList = () => {
                 ),
             },
             {
+                // V4: 质控样的 client_code 由后端自动生成、对用户没有意义，本列不显示它 ——
+                //     类型标签之后同一行接上标准样的标准物质名称、重复样的父样品编号。
                 title: "样品类型",
                 dataIndex: "type",
-                width: 120,
-                render: (type) => {
+                width: 200,
+                render: (type, record) => {
                     const cfg = SampleTypeMap[type] || SampleTypeMap[0];
                     return (
-                        <Tag
-                            icon={cfg.icon}
-                            color={cfg.color}
-                            className="border-none font-bold"
-                        >
-                            {cfg.label}
-                        </Tag>
+                        <div className="flex items-center gap-1.5 whitespace-nowrap">
+                            <Tag
+                                icon={cfg.icon}
+                                color={cfg.color}
+                                className="border-none font-bold m-0"
+                            >
+                                {cfg.label}
+                            </Tag>
+                            {type === 3 && record.parent_lab_code && (
+                                <span className="text-[12px] text-orange-400 font-mono">
+                                    ←{" "}
+                                    {formatSampleCode(
+                                        record.parent_lab_code,
+                                        record.task_lab_code,
+                                    )}
+                                </span>
+                            )}
+                            {type === 2 && record.reference_material_name && (
+                                <span className="text-[12px] text-purple-600 font-bold flex items-center gap-1">
+                                    <StarOutlined />
+                                    {record.reference_material_name}
+                                </span>
+                            )}
+                        </div>
                     );
                 },
             },
@@ -405,14 +449,6 @@ const TestingSampleList = () => {
         <Layout className="bg-white h-[calc(100vh-120px)] overflow-hidden">
             <style>{`
                 .task-drawer .ant-drawer-body { padding: 0; }
-                .sample-table-container .ant-spin-nested-loading,
-                .sample-table-container .ant-spin-container {
-                    flex: 1;
-                    display: flex;
-                    flex-direction: column;
-                    overflow: hidden;
-                }
-
             `}</style>
 
             <Content className="bg-white flex flex-col h-full overflow-hidden">
@@ -475,6 +511,25 @@ const TestingSampleList = () => {
                                 >
                                     导出任务单
                                 </Button>
+                                <Dropdown
+                                    trigger={["click"]}
+                                    menu={{
+                                        items: taskBatchMenuItems,
+                                        onClick: ({ key }) => {
+                                            const op = getOperations(
+                                                "testing",
+                                            ).find((o) => o.value === key);
+                                            if (op) {
+                                                setActiveTaskOp(op);
+                                                setTaskBatchModalOpen(true);
+                                            }
+                                        },
+                                    }}
+                                >
+                                    <Button className="rounded-xl font-bold border-blue-100 text-blue-600 bg-blue-50">
+                                        批量操作此任务 <DownOutlined />
+                                    </Button>
+                                </Dropdown>
                                 <Button
                                     type="primary"
                                     className="bg-orange-600 border-none shadow-lg shadow-orange-200 font-bold px-6 rounded-xl"
@@ -488,9 +543,9 @@ const TestingSampleList = () => {
                         </div>
 
                         <div className="p-6 flex-1 overflow-hidden sample-table-container">
-                            <div className="bg-white h-full rounded-3xl overflow-y-auto flex flex-col">
+                            <div className="bg-white h-full rounded-3xl overflow-hidden flex flex-col">
                                 <CrudTable
-                                    className="min-h-0 pb-6"
+                                    className="min-h-0 "
                                     refreshKey={refreshKey}
                                     title={
                                         <div className="flex items-center gap-3">
@@ -528,13 +583,13 @@ const TestingSampleList = () => {
                                     actionExtra={
                                         <Space>
                                             <Button
-                                                icon={<PlusOutlined />}
+                                                icon={<ExperimentOutlined />}
                                                 onClick={() =>
                                                     setSpecialSampleVisible(
                                                         true,
                                                     )
                                                 }
-                                                className="rounded-xl font-bold border-orange-100 text-orange-600 bg-orange-50"
+                                                className="rounded-xl font-bold border-purple-100 text-purple-600 bg-purple-50"
                                             >
                                                 添加特殊样品
                                             </Button>
@@ -561,7 +616,7 @@ const TestingSampleList = () => {
                                         </Space>
                                     }
                                     onDataLoaded={setSamples}
-                                    scroll={{ y: "calc(100vh - 500px)" }}
+                                    fillHeight
                                 />
                             </div>
                         </div>
@@ -618,17 +673,6 @@ const TestingSampleList = () => {
                 apis={testingApis}
             />
 
-            <SpecialSampleModal
-                open={specialSampleVisible}
-                onCancel={() => setSpecialSampleVisible(false)}
-                taskId={taskId}
-                onSuccess={() => {
-                    setSpecialSampleVisible(false);
-                    setRefreshKey((prev) => prev + 1);
-                }}
-                apis={testingApis}
-            />
-
             <SampleBatchModal
                 open={batchModalOpen}
                 onCancel={() => setBatchModalOpen(false)}
@@ -640,6 +684,29 @@ const TestingSampleList = () => {
                     setBatchModalOpen(false);
                     setRefreshKey((prev) => prev + 1);
                 }}
+            />
+
+            <TaskBatchModal
+                open={taskBatchModalOpen}
+                onCancel={() => setTaskBatchModalOpen(false)}
+                operation={activeTaskOp}
+                taskId={taskId}
+                module="testing"
+                onSuccess={() => {
+                    setTaskBatchModalOpen(false);
+                    setRefreshKey((prev) => prev + 1);
+                }}
+            />
+
+            <SpecialSampleModal
+                open={specialSampleVisible}
+                onCancel={() => setSpecialSampleVisible(false)}
+                taskId={taskId}
+                onSuccess={() => {
+                    setSpecialSampleVisible(false);
+                    setRefreshKey((prev) => prev + 1);
+                }}
+                apis={testingApis}
             />
 
             <DownloadTemplateModal

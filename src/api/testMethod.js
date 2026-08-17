@@ -26,4 +26,6 @@ export const relationTestMethod = (params) => instance.get("/ResourceAdmin/TestM
 //     请求体 { ids: [methodId, ...] }；响应 data 为按 method 分组的数组
 //     [{ id(=method_id), processing_options: [{ id, processing_method_id, processing_method_name,
 //     processing_option_value, created_at }] }]，需要的是各元素的 processing_options，不是 data 本身。
+// V4: 加工配置界面已不再调用它 —— 默认加工选项改由后端在 processUpdate 时按 default 参数
+//     自动匹配，前端无需先查出"建议的加工选项"。端点本身仍保留可用。
 export const processingOptionTestMethod = data => instance.post("/ResourceAdmin/TestMethod/processingOption", data);

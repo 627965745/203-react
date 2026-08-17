@@ -115,6 +115,13 @@ const AddEdit = ({ record, onChange, apis = {} }) => {
                                 {errors.client_code}
                             </div>
                         )}
+                        {/* V4: 数据库新增唯一索引 uq_samples_client_code(task_id, client_code)，
+                            同一任务下重复的客户样号会被后端拒绝 */}
+                        {!errors.client_code && (
+                            <div className="text-[11px] text-slate-400 mt-1">
+                                同一任务下不可重复
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

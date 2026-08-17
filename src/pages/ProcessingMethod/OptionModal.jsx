@@ -3,7 +3,7 @@ import { Modal, Form, Input, Switch, Tag, Space } from "antd";
 const OptionModal = ({ optionModal, form, onCancel, onSubmit }) => {
     return (
         <Modal
-            title={optionModal.option ? "更新加工选项" : "添加加工选项"}
+            title={optionModal.option ? "更新加工选项" : "配置加工选项"}
             open={optionModal.visible}
             onCancel={onCancel}
             cancelText="取消"

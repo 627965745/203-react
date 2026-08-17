@@ -158,7 +158,21 @@ const SpecialSampleModal = ({
                 message.error("未配置添加特殊样品 API");
                 return;
             }
-            const res = await referenceSample(values);
+            // V4: 按样品类型裁剪互斥字段 —— 后端要求空白样(1) 两个关联ID都为空、
+            //     标准样(2) 只带 reference_material_id、重复样(3) 只带 parent_id。
+            //     用户切换类型后表单里可能残留上一次的选择，必须在提交前清掉，
+            //     否则会命中后端的非法输入校验（V4 中部分此类错误码由 102 调整为 101）。
+            // V4: client_code 不再由前端传入，改由后端 helper.frankID() 自动生成。
+            const payload = {
+                task_id: values.task_id,
+                count: values.count,
+                type: values.type,
+                description: values.description || "",
+                reference_material_id:
+                    values.type === 2 ? values.reference_material_id : null,
+                parent_id: values.type === 3 ? values.parent_id : null,
+            };
+            const res = await referenceSample(payload);
             if (res.data.status === 0) {
                 message.success("添加特殊样品成功");
                 onSuccess();
@@ -263,8 +277,12 @@ const SpecialSampleModal = ({
                         <InputNumber min={1} className="w-full" precision={0} />
                     </Form.Item>
 
-                    {/* Placeholder for alignment if needed, or leave empty */}
-                    <div></div>
+                    {/* V4: client_code 由后端 helper.frankID() 自动生成，前端不再提供输入 */}
+                    <div className="flex items-end pb-1">
+                        <span className="text-[11px] text-slate-400 leading-snug">
+                            客户样号由系统自动生成，无需填写
+                        </span>
+                    </div>
                 </div>
 
                 <Divider className="my-1" />
@@ -285,18 +303,22 @@ const SpecialSampleModal = ({
                     </Form.Item>
                 )}
 
+                {/* V4: 重复样必须指定父样品 —— v3 的"留空则由系统随机分配父样品"已取消，
+                    后端现在要求 type=3 时 parent_id 必填 */}
                 {type === 3 && (
                     <Form.Item
                         label="父样品"
                         name="parent_id"
+                        tooltip="重复样必须归属于当前任务下的某个普通样品；本次创建的全部重复样都对应该父样品。"
                         rules={[{ required: true, message: "请选择父样品" }]}
                     >
                         <Select
-                            placeholder="选择当前任务的普通样品"
+                            placeholder="请选择当前任务下的普通样品"
                             loading={parentLoading}
                             options={parentOptions}
                             showSearch
                             optionFilterProp="label"
+                            allowClear
                         />
                     </Form.Item>
                 )}

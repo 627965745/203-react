@@ -14,8 +14,14 @@ export const exportDepartmentTask = data => instance.post("/DepartmentManager/Ta
 export const readDepartmentSample = data => instance.post("/DepartmentManager/Sample/read", data);
 export const updateDepartmentSample = data => instance.post("/DepartmentManager/Sample/update", data);
 export const deleteDepartmentSample = data => instance.post("/DepartmentManager/Sample/delete", data);
-export const referenceDepartmentSample = data => instance.post("/DepartmentManager/Sample/reference", data);
 export const comboDepartmentSample = data => instance.post("/DepartmentManager/Sample/combo", data);
+// V4: 业务逻辑同 WorkflowManager —— task_id 必传；重复样(type=3)必须传 parent_id；
+//     client_code 由后端自动生成
+export const referenceDepartmentSample = data => instance.post("/DepartmentManager/Sample/reference", data);
+// V4: 新增接口 —— 按比例(ratio)生成重复样，与 WorkflowManager/Sample/duplicate 类似，
+//     但基于 department_id 做权限隔离；部门维度生成的重复样，其方法初始 status=1（已分配部门）。
+//     task_id 必传：即使已经给了 sample_ids 缩小范围，也要一并带上 task_id。
+export const duplicateDepartmentSample = data => instance.post("/DepartmentManager/Sample/duplicate", data);
 
 // Department Manager Sample Input/Method APIs
 export const inputCreateDepartmentSample = data => instance.post("/DepartmentManager/Sample/inputCreate", data);

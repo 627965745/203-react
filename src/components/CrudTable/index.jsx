@@ -48,6 +48,15 @@ import {
  * @param {function} props.formatPayload - Optional function to format payload before saving
  * @param {number} props.modalWidth - Width of the modal (default: 650)
  * @param {function} props.renderExpandedRow - Optional function for Ant Design expandable.expandedRowRender
+ * @param {number} props.defaultPageSize - Initial page size (default: 20). Do not pass `pagination`
+ *   via tableProps to change this — tableProps is spread after CrudTable's own controlled
+ *   `pagination` prop on the underlying Table, so a `tableProps.pagination` would silently
+ *   clobber it and disconnect paging from CrudTable's fetch logic.
+ * @param {boolean} props.fillHeight - Make the table body the ONLY scroll area inside a
+ *   height-bounded parent: content taller than the space scrolls internally with the pagination
+ *   pinned below it, while short content keeps its natural height with the pagination sitting
+ *   right under the last row. The parent must be height-bounded (e.g. `h-full`) and must NOT
+ *   scroll itself (`overflow-hidden`), otherwise you get two scrollbars.
  */
 const CrudTable = ({
     title,
@@ -68,6 +77,8 @@ const CrudTable = ({
     formatData,
     formatPayload,
     modalWidth = 650,
+    defaultPageSize = 20,
+    fillHeight = false,
     renderExpandedRow,
     renderActions, // New prop for custom action column content
     actionWidth = 160, // Width of the action column; widen when renderActions adds extra buttons
@@ -93,7 +104,7 @@ const CrudTable = ({
     const [loading, setLoading] = useState(false);
     const [pagination, setPagination] = useState({
         current: 1,
-        pageSize: 20,
+        pageSize: defaultPageSize,
         total: 0,
     });
     const [filterValue, setFilterValue] = useState("");
@@ -380,6 +391,14 @@ const CrudTable = ({
         fetchData(page, newPageSize, filterValue, !pageSizeChanged);
     };
 
+    // fillHeight 要求表格体是独立的可滚动元素，而 rc-table 只有在 scroll.y 有值时
+    // （fixHeader）才会把 header/body 拆成两个 div。具体数值无所谓——上面的 CSS 会把
+    // 行内 max-height 覆盖掉，改由 flex 收缩决定实际高度。
+    const mergedScroll =
+        fillHeight && scroll?.y === undefined
+            ? { ...scroll, y: "100%" }
+            : scroll;
+
     const hasBatch = Array.isArray(batchActions) && batchActions.length > 0;
     // When multi-select is on AND rows carry an expandable detail panel, we hide the
     // native "+" expand column (no room next to the checkbox) and surface a
@@ -573,8 +592,48 @@ const CrudTable = ({
 
     return (
         <div
-            className={`flex flex-col bg-white pl-4 ${className || "min-h-[calc(100vh-112px)]"}`}
+            className={`flex flex-col bg-white pl-4 ${fillHeight ? "crud-table-fill " : ""}${className || "min-h-[calc(100vh-112px)]"}`}
         >
+            {fillHeight && (
+                <style>{`
+                    /* fillHeight: 让表格体成为唯一的滚动区域，避免"外层容器 + 表格体"两条滚动条。
+                       链路上每一层都是 flex 列且 flex:0 1 auto + min-height:0：
+                       内容高于可用空间时逐层收缩，最终由 .ant-table-body 内部滚动，分页固定在其下方；
+                       内容放得下时不发生收缩，各层保持自然高度，分页照常紧跟在表格下面。 */
+                    /* 选择器里类名重复一次是为了提高优先级：调用方页面上可能存在
+                       形如 .xxx-layout .ant-spin-container { flex: 1 } 的既有规则
+                       （同为 0,2,0），重复类名后为 0,3,0，无需依赖样式表先后顺序。 */
+                    .crud-table-fill.crud-table-fill {
+                        display: flex;
+                        flex-direction: column;
+                        flex: 1;
+                        min-height: 0;
+                    }
+                    /* 注意 .ant-table-wrapper > .ant-spin：antd v6 的 Spin 外层就是
+                       .ant-spin（v5 的 .ant-spin-nested-loading 已不存在）。这一层默认是
+                       display:block + min-height:auto，漏掉它整条收缩链就会在此断掉。 */
+                    .crud-table-fill.crud-table-fill .ant-table-wrapper,
+                    .crud-table-fill.crud-table-fill .ant-table-wrapper > .ant-spin,
+                    .crud-table-fill.crud-table-fill .ant-spin-container,
+                    .crud-table-fill.crud-table-fill .ant-table,
+                    .crud-table-fill.crud-table-fill .ant-table-container {
+                        display: flex;
+                        flex-direction: column;
+                        flex: 0 1 auto;
+                        min-height: 0;
+                    }
+                    /* rc-table 给 body 写的是行内 maxHeight + overflowY:scroll（有数据时恒显滚动条槽），
+                       这里交还给 flex 控制，并改为 auto 让"放得下就不出现滚动条"。 */
+                    .crud-table-fill.crud-table-fill .ant-table-body {
+                        flex: 0 1 auto;
+                        min-height: 0;
+                        max-height: none !important;
+                        overflow-y: auto !important;
+                    }
+                    .crud-table-fill.crud-table-fill .ant-table-header,
+                    .crud-table-fill.crud-table-fill .ant-table-pagination { flex: none; }
+                `}</style>
+            )}
             <div className="mb-3 flex justify-between items-center relative mt-1">
                 <h1 className="text-xl font-black text-slate-800 m-0 tracking-tight">
                     {title}
@@ -700,7 +759,7 @@ const CrudTable = ({
                 bordered
                 size="small"
                 className="mt-2"
-                scroll={scroll}
+                scroll={mergedScroll}
                 expandable={
                     renderExpandedRow
                         ? {

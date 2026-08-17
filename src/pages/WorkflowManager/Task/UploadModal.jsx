@@ -24,7 +24,9 @@ const UploadModal = ({ visible, onCancel, onSuccess }) => {
         try {
             const res = await uploadTask(formData);
             if (res.data.status === 0) {
-                message.success("任务导入成功");
+                // V4: 样品插入改为 INSERT IGNORE —— 同一任务下 client_code 已存在时不再报错，
+                //     后端会更新该样品的自定义输入项与检测方法，提示文案同步说明这一点。
+                message.success("任务导入成功；已存在的样品已更新其参数与检测方法");
                 onSuccess();
                 onCancel();
                 setFileList([]);
@@ -86,6 +88,10 @@ const UploadModal = ({ visible, onCancel, onSuccess }) => {
                     </p>
                     <p className="ant-upload-hint text-xs">
                         仅支持 .xlsx 或 .xls 格式的任务导入模板
+                    </p>
+                    {/* V4: 重复 client_code 由报错改为更新已有样品 */}
+                    <p className="ant-upload-hint text-xs">
+                        同一任务下客户样号已存在时不会报错，将更新该样品的参数与检测方法
                     </p>
                 </Dragger>
                 {fileList.length > 0 && (

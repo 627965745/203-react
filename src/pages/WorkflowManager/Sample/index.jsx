@@ -10,6 +10,7 @@ import {
     Empty,
     Divider,
     Tooltip,
+    Dropdown,
 } from "antd";
 import {
     BarcodeOutlined,
@@ -22,7 +23,6 @@ import {
     PlusOutlined,
     InboxOutlined,
     HistoryOutlined,
-    RocketOutlined,
     TagOutlined,
     BlockOutlined,
     StarOutlined,
@@ -33,6 +33,7 @@ import {
     SendOutlined,
     LeftOutlined,
     RightOutlined,
+    DownOutlined,
 } from "@ant-design/icons";
 import CrudTable from "../../../components/CrudTable";
 import {
@@ -49,7 +50,6 @@ import {
     methodCreateSample,
     methodUpdateSample,
     methodDeleteSample,
-    processCreateSample,
     processUpdateSample,
     processDeleteSample,
     distributeSample,
@@ -59,6 +59,8 @@ import {
 } from "../../../api/workflow";
 import { comboTestItem } from "../../../api/testItem";
 import { comboReferenceMaterial } from "../../../api/referenceMaterial";
+// V4: 样品新增 processor_id（加工责任人），列表/详情需按 ID 显示姓名
+import { comboUser } from "../../../api/user";
 
 import AddEdit from "../../../components/SampleManager/AddEdit";
 import DetailDrawer from "../../../components/SampleManager/DetailDrawer";
@@ -66,6 +68,7 @@ import SpecialSampleModal from "../../../components/SampleManager/modals/Special
 import SampleBatchModal, {
     getOperations,
 } from "../../../components/SampleManager/modals/SampleBatchModal";
+import TaskBatchModal from "../../../components/SampleManager/modals/TaskBatchModal";
 
 const { Sider, Content } = Layout;
 
@@ -74,6 +77,13 @@ const SampleTypeMap = {
     1: { label: "空白样", color: "default", icon: <BlockOutlined /> },
     2: { label: "标准样", color: "purple", icon: <StarOutlined /> },
     3: { label: "重复样", color: "orange", icon: <RetweetOutlined /> },
+};
+
+// V4: 样品级加工状态 —— 与"加工人"列一起展示，说明该样品在加工管理中的处境
+const ProcessingStatusMap = {
+    0: { label: "未加工", color: "default" },
+    1: { label: "加工中", color: "processing" },
+    2: { label: "加工完成", color: "success" },
 };
 
 const SampleList = () => {
@@ -95,6 +105,10 @@ const SampleList = () => {
     const [batchSamples, setBatchSamples] = useState([]);
     const [specialSampleVisible, setSpecialSampleVisible] = useState(false);
 
+    // 任务级批量操作（不勾选样品，直接对整个选中任务生效，走 task_id）
+    const [taskBatchModalOpen, setTaskBatchModalOpen] = useState(false);
+    const [activeTaskOp, setActiveTaskOp] = useState(null);
+
     const batchActions = useMemo(
         () =>
             getOperations("workflow").map((op) => ({
@@ -111,11 +125,39 @@ const SampleList = () => {
         [],
     );
 
+    const taskBatchMenuItems = useMemo(
+        () =>
+            getOperations("workflow").map((op) => ({
+                key: op.value,
+                label: op.label,
+                icon: op.icon,
+                danger: op.value.includes("Delete") || op.value === "reject",
+            })),
+        [],
+    );
+
     const [showIds, setShowIds] = useState({});
+
+    // V4: {userId: 姓名} —— 样品行只带 processor_id，这里拉一次用户下拉把 ID 翻成姓名，
+    //     列表的"加工人"列与详情抽屉共用同一份映射，避免每行/每次开抽屉都发请求。
+    const [userMap, setUserMap] = useState({});
 
     useEffect(() => {
         fetchTasks();
     }, [taskPage]);
+
+    useEffect(() => {
+        comboUser()
+            .then((res) => {
+                const list = res.data?.data || [];
+                setUserMap(
+                    Object.fromEntries(
+                        list.map((u) => [u.id, u.nickname || u.name]),
+                    ),
+                );
+            })
+            .catch(() => setUserMap({}));
+    }, []);
 
     const fetchTasks = async () => {
         setTaskLoading(true);
@@ -184,6 +226,15 @@ const SampleList = () => {
         [tasks, taskId],
     );
 
+    const formatSampleCode = (code, taskCode) => {
+        if (!code) return "";
+        const str = String(code);
+        if (str.includes("-")) return str;
+        const prefix = taskCode || selectedTask?.lab_code;
+        const seq = str.padStart(4, "0");
+        return prefix ? `${prefix}-${seq}` : seq;
+    };
+
     const columns = useMemo(
         () => [
             {
@@ -195,8 +246,7 @@ const SampleList = () => {
                     <div className="flex items-center gap-2">
                         <BarcodeOutlined className="text-blue-500" />
                         <span className="font-mono font-bold text-blue-600">
-                            {selectedTask?.lab_code}-
-                            {text?.toString().padStart(4, "0")}
+                            {formatSampleCode(text, record.task_lab_code)}
                         </span>
                         {record.description && (
                             <Tooltip title={record.description}>
@@ -209,7 +259,7 @@ const SampleList = () => {
             {
                 title: "样品类型",
                 dataIndex: "type",
-                width: 120,
+                width: 110,
                 render: (type) => {
                     const cfg = SampleTypeMap[type] || SampleTypeMap[0];
                     return (
@@ -224,50 +274,54 @@ const SampleList = () => {
                 },
             },
             {
+                // V4: 质控样的 client_code 改由后端 helper.frankID() 自动生成，是一串对用户
+                //     没有意义的编号 —— 空白样/标准样/重复样这一列不再显示它，统一显示类型名，
+                //     并把标准物质名称、父样品编号接在同一行；只有普通样才显示真正的客户样号。
                 title: "客户样号",
                 dataIndex: "client_code",
-                width: 180,
-                render: (text, record) => (
-                    <div className="flex flex-col">
+                width: 240,
+                render: (text, record) => {
+                    if (record.type > 0) {
+                        const cfg = SampleTypeMap[record.type];
+                        return (
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                                <span className="font-bold text-slate-500">
+                                    {cfg?.label}
+                                </span>
+                                {record.type === 3 &&
+                                    record.parent_lab_code && (
+                                        <span className="text-[12px] text-orange-400 font-mono">
+                                            ←{" "}
+                                            {formatSampleCode(
+                                                record.parent_lab_code,
+                                                record.task_lab_code,
+                                            )}
+                                        </span>
+                                    )}
+                                {record.type === 2 &&
+                                    record.reference_material_name && (
+                                        <span className="text-[12px] text-purple-600 font-bold flex items-center gap-1">
+                                            <StarOutlined />
+                                            {record.reference_material_name}
+                                        </span>
+                                    )}
+                            </div>
+                        );
+                    }
+                    return (
                         <div className="flex items-center gap-2">
                             <NumberOutlined className="text-slate-400" />
                             <span className="font-bold text-slate-700">
                                 {text}
                             </span>
                         </div>
-                        {record.type === 3 && record.parent_client_code && (
-                            <span className="text-[10px] text-orange-400 font-mono mt-0.5">
-                                ← 重复自: {record.parent_client_code}
-                            </span>
-                        )}
-                    </div>
-                ),
-            },
-            {
-                title: "标准样物质",
-                width: 200,
-                render: (_, record) => {
-                    if (record.type === 2 && record.reference_material_name) {
-                        return (
-                            <div className="flex items-center gap-2 text-purple-600">
-                                <StarOutlined />
-                                <span className="text-xs font-bold border-b border-purple-200 border-dashed pb-0.5">
-                                    {record.reference_material_name}
-                                </span>
-                            </div>
-                        );
-                    }
-                    return (
-                        <span className="text-gray-300 italic text-[11px]">
-                            -
-                        </span>
                     );
                 },
             },
             {
                 title: "创建人",
                 dataIndex: "creator_name",
-                width: 160,
+                width: 80,
                 render: (name, record) =>
                     renderNameWithId(
                         name,
@@ -277,8 +331,56 @@ const SampleList = () => {
                         UserOutlined,
                     ),
             },
+            // V4: 新增"加工人"列 —— processor_id 为空的样品不会进入加工管理视图
+            {
+                title: "加工人",
+                dataIndex: "processor_id",
+                width: 130,
+                render: (processorId, record) => {
+                    if (!processorId) {
+                        return (
+                            <Tooltip title="未指定加工人，该样品不会出现在加工管理中">
+                                <span className="text-slate-300 italic">
+                                    未指定
+                                </span>
+                            </Tooltip>
+                        );
+                    }
+                    const cfg =
+                        ProcessingStatusMap[record.processing_status] ||
+                        ProcessingStatusMap[0];
+                    return (
+                        <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                                <ToolOutlined className="text-orange-500" />
+                                <span className="font-bold text-slate-700">
+                                    {userMap[processorId]}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <Tag
+                                    color={cfg.color}
+                                    bordered={false}
+                                    className="m-0 text-[10px] font-bold"
+                                >
+                                    {cfg.label}
+                                </Tag>
+                                {record.processing_deadline && (
+                                    <span className="text-[10px] text-slate-400 font-mono">
+                                        {
+                                            record.processing_deadline.split(
+                                                " ",
+                                            )[0]
+                                        }
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    );
+                },
+            },
         ],
-        [showIds, selectedTask],
+        [showIds, selectedTask, userMap],
     );
 
     const api = useMemo(
@@ -339,7 +441,7 @@ const SampleList = () => {
             methodCreate: methodCreateSample,
             methodUpdate: methodUpdateSample,
             methodDelete: methodDeleteSample,
-            processCreate: processCreateSample,
+            // 需求变更：processCreate 接口已取消，加工的添加/修改统一走 processUpdate（整体覆盖）
             processUpdate: processUpdateSample,
             processDelete: processDeleteSample,
             distribute: distributeSample,
@@ -542,6 +644,25 @@ const SampleList = () => {
                                 </div>
                             </Space>
                             <Space>
+                                <Dropdown
+                                    trigger={["click"]}
+                                    menu={{
+                                        items: taskBatchMenuItems,
+                                        onClick: ({ key }) => {
+                                            const op = getOperations(
+                                                "workflow",
+                                            ).find((o) => o.value === key);
+                                            if (op) {
+                                                setActiveTaskOp(op);
+                                                setTaskBatchModalOpen(true);
+                                            }
+                                        },
+                                    }}
+                                >
+                                    <Button className="rounded-xl font-bold border-blue-100 text-blue-600 bg-blue-50">
+                                        批量操作此任务 <DownOutlined />
+                                    </Button>
+                                </Dropdown>
                                 <Button
                                     type="primary"
                                     className="bg-blue-600 border-none shadow-lg shadow-blue-200 font-bold px-6 rounded-xl"
@@ -554,9 +675,9 @@ const SampleList = () => {
                             </Space>
                         </div>
                         <div className="p-6 flex-1 overflow-hidden">
-                            <div className="bg-white h-full rounded-3xl overflow-y-auto flex flex-col">
+                            <div className="bg-white h-full rounded-3xl overflow-hidden flex flex-col">
                                 <CrudTable
-                                    className="min-h-0 pb-6"
+                                    className="min-h-0"
                                     refreshKey={refreshKey}
                                     title={
                                         <div className="flex items-center gap-3">
@@ -584,23 +705,19 @@ const SampleList = () => {
                                     batchActions={batchActions}
                                     batchDropdown
                                     actionExtra={
-                                        <Space>
-                                            <Button
-                                                icon={<ExperimentOutlined />}
-                                                onClick={() =>
-                                                    setSpecialSampleVisible(
-                                                        true,
-                                                    )
-                                                }
-                                                className="rounded-xl font-bold border-purple-100 text-purple-600 bg-purple-50"
-                                            >
-                                                添加特殊样品
-                                            </Button>
-                                        </Space>
+                                        <Button
+                                            icon={<ExperimentOutlined />}
+                                            onClick={() =>
+                                                setSpecialSampleVisible(true)
+                                            }
+                                            className="rounded-xl font-bold border-purple-100 text-purple-600 bg-purple-50"
+                                        >
+                                            添加特殊样品
+                                        </Button>
                                     }
                                     renderActions={renderActions}
                                     onDataLoaded={setSamples}
-                                    scroll={{ y: "calc(100vh - 320px)" }}
+                                    fillHeight
                                 />
                             </div>
                         </div>
@@ -619,6 +736,8 @@ const SampleList = () => {
                 sampleData={samples.find((s) => s.id === activeSampleId)}
                 taskId={taskId}
                 taskLabCode={selectedTask?.lab_code}
+                /* V4: 供加工任务卡片把 processor_id 显示成加工人姓名 */
+                userMap={userMap}
                 apis={workflowApis}
             />
 
@@ -638,6 +757,18 @@ const SampleList = () => {
                 taskId={taskId}
                 onSuccess={handleSpecialSuccess}
                 apis={workflowApis}
+            />
+
+            <TaskBatchModal
+                open={taskBatchModalOpen}
+                onCancel={() => setTaskBatchModalOpen(false)}
+                operation={activeTaskOp}
+                taskId={taskId}
+                module="workflow"
+                onSuccess={() => {
+                    setTaskBatchModalOpen(false);
+                    setRefreshKey((prev) => prev + 1);
+                }}
             />
         </Layout>
     );

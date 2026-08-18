@@ -106,6 +106,11 @@ const TaskBatchModal = ({
     // 需求变更：processDelete 接口不支持按 option 局部删除——不管传不传 option_ids
     // 都会清空该任务下所有样品的加工，所以它不再展示选项目录，只有"批量配置加工"
     // (processUpdate，整体覆盖) 才需要选项与期限。
+    // V4: 除"批量添加方法"（methodCreate 是给样品新增方法）以外，其余按方法操作的
+    //     任务级批量都只对"已经分派了所选方法"的样品生效 —— 没有这些方法的样品不受影响，
+    //     这一点在只选任务、看不到具体样品时很容易被误解，所以在选择器下方点明。
+    const methodScopeHint =
+        needsMethodIds && operation.value !== "methodCreate";
     const needsOptionIds = operation.value === "processUpdate";
     const needsDeadline =
         operation.value === "distribute" || operation.value === "processUpdate";
@@ -190,10 +195,15 @@ const TaskBatchModal = ({
                       message:
                           "仅复制该任务下的普通样，质控样将被忽略；方法数按比例向上取整。",
                   }
-                : {
-                      type: "warning",
-                      message: `将对该任务下所有符合条件的样品执行「${operation.label}」。`,
-                  };
+                : operation.value === "methodCreate"
+                  ? {
+                        type: "warning",
+                        message: `将对该任务下未分配所选检测方法的样品执行「${operation.label}」，已经分派这些方法的样品不受影响。`,
+                    }
+                  : {
+                        type: "warning",
+                        message: `将对该任务下所有已分派了所选检测方法的样品执行「${operation.label}」，未分派这些方法的样品不受影响。`,
+                    };
 
     return (
         <Modal

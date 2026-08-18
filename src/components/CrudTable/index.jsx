@@ -417,7 +417,10 @@ const CrudTable = ({
     }, []);
 
     const handleBatchClick = (action) => {
-        if (!selectedRows.length) {
+        // V4: 标了 allowEmptySelection 的操作允许在"未勾选任何行"时也触发 —— 由调用方在
+        // onClick 里自行处理空数组（样品中心用它来弹出"是否作用于整个任务"的确认框）。
+        // 其余操作行为不变，仍然要求先勾选。
+        if (!selectedRows.length && !action.allowEmptySelection) {
             message.warning("未选择任何数据");
             return;
         }

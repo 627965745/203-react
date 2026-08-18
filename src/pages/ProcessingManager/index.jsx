@@ -392,7 +392,46 @@ const ProcessingManager = () => {
                 icon: <CheckCircleOutlined />,
                 type: "primary",
                 className: "font-bold",
+                // V4: 未勾选样品时不再拦下，改为确认后作用于整个任务（与工作流/科室/
+                //     检测三个样品中心的批量操作保持一致）
+                allowEmptySelection: true,
                 onClick: (rows, { clearSelection, refresh }) => {
+                    // V4: 任务级批量完成加工 —— 走 task_id，由后端挑出该任务下
+                    //     "正在加工且 processor_id 是当前用户"的样品统一标记完成。
+                    if (!rows.length) {
+                        Modal.confirm({
+                            title: "未勾选任何样品",
+                            content:
+                                "未勾选任何样品，「批量完成加工」将应用于当前任务下所有由您负责、且处于\"正在加工\"状态的样品，确定吗？",
+                            okText: "确定",
+                            cancelText: "取消",
+                            onOk: async () => {
+                                try {
+                                    const res =
+                                        await approveSampleProcessingManager({
+                                            task_id: taskId,
+                                        });
+                                    if (res.data.status === 0) {
+                                        message.success(
+                                            "已完成该任务下所有待加工样品",
+                                        );
+                                        clearSelection();
+                                        refresh();
+                                    } else {
+                                        message.error(
+                                            res.data.message || "批量操作失败",
+                                        );
+                                    }
+                                } catch (err) {
+                                    console.error(
+                                        "Task batch approve error:",
+                                        err,
+                                    );
+                                }
+                            },
+                        });
+                        return;
+                    }
                     const eligible = rows.filter(
                         (r) => r.processing_status === 1,
                     );
@@ -440,7 +479,7 @@ const ProcessingManager = () => {
                 },
             },
         ],
-        [],
+        [taskId],
     );
 
     const taskColumns = [

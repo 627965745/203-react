@@ -10,7 +10,7 @@ import {
     Empty,
     Divider,
     Tooltip,
-    Dropdown,
+    Modal,
 } from "antd";
 import {
     BarcodeOutlined,
@@ -33,7 +33,6 @@ import {
     SendOutlined,
     LeftOutlined,
     RightOutlined,
-    DownOutlined,
 } from "@ant-design/icons";
 import CrudTable from "../../../components/CrudTable";
 import {
@@ -116,22 +115,27 @@ const SampleList = () => {
                 label: op.label,
                 icon: op.icon,
                 danger: op.value.includes("Delete") || op.value === "reject",
+                // V4: 未勾选样品时不再直接拦下，改为确认后作用于整个任务 ——
+                //     原来顶部单独的"批量操作此任务"下拉已取消，两条路径合并到这里。
+                allowEmptySelection: true,
                 onClick: (rows) => {
+                    if (!rows.length) {
+                        Modal.confirm({
+                            title: "未勾选任何样品",
+                            content: `未勾选任何样品，「${op.label}」将应用于当前任务下所有样品，确定吗？`,
+                            okText: "确定",
+                            cancelText: "取消",
+                            onOk: () => {
+                                setActiveTaskOp(op);
+                                setTaskBatchModalOpen(true);
+                            },
+                        });
+                        return;
+                    }
                     setActiveOp(op);
                     setBatchSamples(rows);
                     setBatchModalOpen(true);
                 },
-            })),
-        [],
-    );
-
-    const taskBatchMenuItems = useMemo(
-        () =>
-            getOperations("workflow").map((op) => ({
-                key: op.value,
-                label: op.label,
-                icon: op.icon,
-                danger: op.value.includes("Delete") || op.value === "reject",
             })),
         [],
     );
@@ -644,25 +648,6 @@ const SampleList = () => {
                                 </div>
                             </Space>
                             <Space>
-                                <Dropdown
-                                    trigger={["click"]}
-                                    menu={{
-                                        items: taskBatchMenuItems,
-                                        onClick: ({ key }) => {
-                                            const op = getOperations(
-                                                "workflow",
-                                            ).find((o) => o.value === key);
-                                            if (op) {
-                                                setActiveTaskOp(op);
-                                                setTaskBatchModalOpen(true);
-                                            }
-                                        },
-                                    }}
-                                >
-                                    <Button className="rounded-xl font-bold border-blue-100 text-blue-600 bg-blue-50">
-                                        批量操作此任务 <DownOutlined />
-                                    </Button>
-                                </Dropdown>
                                 <Button
                                     type="primary"
                                     className="bg-blue-600 border-none shadow-lg shadow-blue-200 font-bold px-6 rounded-xl"

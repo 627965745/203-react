@@ -637,7 +637,10 @@ const CrudTable = ({
                     .crud-table-fill.crud-table-fill .ant-table-pagination { flex: none; }
                 `}</style>
             )}
-            <div className="mb-3 flex justify-between items-center relative mt-1">
+            {/* V6.1: shrink-0 —— fillHeight 模式下根容器是 flex 列，标题行和工具栏默认
+                flex-shrink:1 会被压扁（实测工具栏 clientHeight 33px / scrollHeight 112px），
+                内容溢出后被下方表格盖住、按钮点不到。只让表格体收缩，这两行保持自然高度。 */}
+            <div className="shrink-0 mb-3 flex justify-between items-center relative mt-1">
                 <h1 className="text-xl font-black text-slate-800 m-0 tracking-tight">
                     {title}
                 </h1>
@@ -696,7 +699,10 @@ const CrudTable = ({
                 {headerExtra}
             </div>
 
-            <div className="flex justify-between items-center mb-2 min-h-[32px]">
+            {/* V5: 允许换行 —— 样品中心在这一行新增了「批次」「样品类型」筛选器，
+                窄屏（左侧导航 + 任务列表挤占宽度）时原来的单行布局会溢出，
+                而祖先元素 overflow-hidden 会把「添加特殊样品」等按钮直接裁掉、点不到。 */}
+            <div className="shrink-0 flex flex-wrap gap-2 justify-between items-center mb-2 min-h-[32px]">
                 {!hideSearch && (
                     <Input.Search
                         placeholder={searchPlaceholder}

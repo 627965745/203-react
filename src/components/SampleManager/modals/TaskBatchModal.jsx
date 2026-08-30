@@ -9,6 +9,7 @@ import {
     Spin,
     Alert,
     Input,
+    InputNumber,
     Switch,
 } from "antd";
 import dayjs from "dayjs";
@@ -126,6 +127,10 @@ const TaskBatchModal = ({
             const values = await form.validateFields();
             setSubmitting(true);
             const payload = { task_id: taskId };
+            // V5: batch 仅在与 task_id 联用时生效，把作用范围从"整个任务"收窄到"该任务的第 N 批"。
+            //     与 read 接口不同，这里没有"0 = 未分批"的语义 —— 要么不传（全部批次），
+            //     要么传实际批次号(≥1)，因此留空时直接不带该字段。
+            if (values.batch != null) payload.batch = values.batch;
             if (needsMethodIds) payload.method_ids = values.method_ids;
             if (needsOptionIds) payload.option_ids = values.option_ids || [];
             if (needsDeadline) {
@@ -252,6 +257,37 @@ const TaskBatchModal = ({
             />
             <Spin spinning={loading}>
                 <Form form={form} layout="vertical">
+                    {/* V5: 按批次执行 —— 留空则作用于该任务下的全部样品（与 v4 行为一致） */}
+                    <Form.Item
+                        name="batch"
+                        label={
+                            <span className="font-black text-slate-700">
+                                限定批次
+                                <span className="ml-2 text-[11px] font-bold text-slate-400">
+                                    （可选）
+                                </span>
+                            </span>
+                        }
+                        tooltip={
+                            operation.value === "duplicate"
+                                ? "只从该批次的普通样中复制生成重复样；留空则取该任务下全部普通样。"
+                                : "只对该任务下属于此批次的样品执行；留空则作用于该任务全部样品。此处不支持 0（未分批）。"
+                        }
+                        rules={[
+                            {
+                                type: "number",
+                                min: 1,
+                                message: "批次号必须不小于 1",
+                            },
+                        ]}
+                    >
+                        <InputNumber
+                            min={1}
+                            precision={0}
+                            className="w-full"
+                        />
+                    </Form.Item>
+
                     {needsMethodIds && (
                         <Form.Item
                             name="method_ids"

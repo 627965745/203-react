@@ -2,11 +2,14 @@ import { useState, useEffect } from "react";
 import { Input, Space, Select, InputNumber, DatePicker } from "antd";
 import dayjs from "dayjs";
 import { comboReferenceMaterialMediumType } from "../../api/referenceMaterialMediumType";
+// V5: 浓度/不确定度是 0~1 float，改用「尾数 × 数量级」两段式输入，避免手敲 0.0000045
+import ScientificInput from "../../components/ScientificInput";
 
+// V5: category 语义变化 —— 0 标准溶液 / 1 基准试剂（原 0「标准物质」迁至 ReferenceSample）。
+//     后端 update/prepare 的校验上限一度仍为 2，注解中已标注修复；前端一律只传 0/1。
 const CategoryOptions = [
-    { label: "标准物质", value: 0 },
-    { label: "标准溶液", value: 1 },
-    { label: "基准试剂", value: 2 },
+    { label: "标准溶液", value: 0 },
+    { label: "基准试剂", value: 1 },
 ];
 
 const StageOptions = [
@@ -72,6 +75,27 @@ const AddEdit = ({ record, onChange }) => {
             record?.medium_type_id === null
         ) {
             newErrors.medium_type_id = "请选择介质类型";
+        }
+        // V5: lab_code 由可空改为必填
+        if (!record?.lab_code || record.lab_code.trim() === "") {
+            newErrors.lab_code = "试剂标签编码不可为空";
+        }
+        // V5: concentration / uncertainty 均为必填，且后端统一为 0~1 的 float
+        if (
+            record?.concentration === undefined ||
+            record?.concentration === null
+        ) {
+            newErrors.concentration = "浓度不可为空";
+        } else if (record.concentration < 0 || record.concentration > 1) {
+            newErrors.concentration = "浓度需在 0~1 之间";
+        }
+        if (
+            record?.uncertainty === undefined ||
+            record?.uncertainty === null
+        ) {
+            newErrors.uncertainty = "不确定度不可为空";
+        } else if (record.uncertainty < 0 || record.uncertainty > 1) {
+            newErrors.uncertainty = "不确定度需在 0~1 之间";
         }
 
         setErrors(newErrors);
@@ -214,16 +238,25 @@ const AddEdit = ({ record, onChange }) => {
             </div>
 
             <div className="grid grid-cols-3 gap-4">
+                {/* V5: 试剂标签编码(lab_code) 改为必填 */}
                 <div>
-                    <div className="mb-2">试剂标签编码</div>
+                    <div className="mb-2">
+                        试剂标签编码 <span className="text-red-500">*</span>
+                    </div>
                     <Input
                         placeholder="试剂标签编码"
                         value={record.lab_code || ""}
                         onChange={(e) =>
                             updateField("lab_code", e.target.value)
                         }
+                        status={errors.lab_code ? "error" : ""}
                         maxLength={255}
                     />
+                    {errors.lab_code && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.lab_code}
+                        </div>
+                    )}
                 </div>
                 <div>
                     <div className="mb-2">样品编码</div>
@@ -323,43 +356,46 @@ const AddEdit = ({ record, onChange }) => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            {/* V5: 删除 质量浓度(mass_concentration) / 介质浓度(medium_concentration)；
+                新增必填 浓度(concentration)，不确定度(uncertainty) 也改为必填。
+                两者都是 0~1 的 float（最多 8 位小数），用「尾数 × 数量级」两段式录入，
+                右侧下拉是 10 的负幂次，不是数据里的 unit 计量单位。 */}
+            <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <div className="mb-2">不确定度(%)</div>
-                    <InputNumber
-                        className="w-full"
-                        min={0}
-                        max={100}
-                        placeholder="相对扩展不确定度"
+                    <div className="mb-2">
+                        浓度 <span className="text-red-500">*</span>
+                    </div>
+                    {/* 「实际值」提示由 ScientificInput 统一渲染（showActual），
+                        与调配录入、成分含量表保持一致 */}
+                    <ScientificInput
+                        value={record.concentration}
+                        onChange={(val) => updateField("concentration", val)}
+                        status={errors.concentration ? "error" : ""}
+                        placeholder="浓度"
+                        showActual
+                    />
+                    {errors.concentration && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.concentration}
+                        </div>
+                    )}
+                </div>
+                <div>
+                    <div className="mb-2">
+                        不确定度 <span className="text-red-500">*</span>
+                    </div>
+                    <ScientificInput
                         value={record.uncertainty}
                         onChange={(val) => updateField("uncertainty", val)}
+                        status={errors.uncertainty ? "error" : ""}
+                        placeholder="相对扩展不确定度"
+                        showActual
                     />
-                </div>
-                <div>
-                    <div className="mb-2">质量浓度(%)</div>
-                    <InputNumber
-                        className="w-full"
-                        min={0}
-                        max={100}
-                        placeholder="质量浓度"
-                        value={record.mass_concentration}
-                        onChange={(val) =>
-                            updateField("mass_concentration", val)
-                        }
-                    />
-                </div>
-                <div>
-                    <div className="mb-2">介质浓度(%)</div>
-                    <InputNumber
-                        className="w-full"
-                        min={0}
-                        max={100}
-                        placeholder="介质浓度"
-                        value={record.medium_concentration}
-                        onChange={(val) =>
-                            updateField("medium_concentration", val)
-                        }
-                    />
+                    {errors.uncertainty && (
+                        <div className="text-red-500 text-sm mt-1">
+                            {errors.uncertainty}
+                        </div>
+                    )}
                 </div>
             </div>
 

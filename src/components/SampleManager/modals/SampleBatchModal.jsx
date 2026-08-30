@@ -11,6 +11,7 @@ import {
     Tag,
     Table as AntTable,
     Input,
+    InputNumber,
     Alert,
     Switch,
 } from "antd";
@@ -26,6 +27,7 @@ import {
     SendOutlined,
     RollbackOutlined,
     RetweetOutlined,
+    NumberOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 
@@ -69,6 +71,9 @@ export const resolveBatchApi = (module) => {
             reject: workflowApi.rejectSample,
             // V4: 新增"按比例生成重复样"，三个模块各有独立端点（权限隔离维度不同）
             duplicate: workflowApi.duplicateSample,
+            // V5: 新增"设置批次" —— 只有 WorkflowManager 提供该端点
+            // V6: batchSet 的 batch 支持传 0 —— 把所选样品清回「未分批」(NULL)
+            batchSet: workflowApi.batchSetSample,
         },
         department: {
             methodCreate: departmentApi.methodCreateDepartmentSample,
@@ -208,6 +213,19 @@ export const getOperations = (module) => {
                 leaf: "sample",
             },
         ];
+        // V5: 设置批次(batchSet) 只有 WorkflowManager/Sample 提供端点，
+        //     且只接受 sample_ids（没有 task_id 整任务变体），所以必须先勾选样品。
+        if (module === "workflow") {
+            // V6: batchSet 支持清除批次，操作名改为「设置/清除批次」
+            ops.push({
+                label: "设置/清除批次",
+                value: "batchSet",
+                icon: <NumberOutlined />,
+                color: "blue",
+                leaf: "sample",
+                requireSelection: true,
+            });
+        }
         if (module === "department") {
             ops.push({
                 label: "批量撤回任务",
@@ -261,6 +279,8 @@ const SampleBatchModal = ({
     const [form] = Form.useForm();
     // V4: 开启"使用默认加工选项"后，option_ids 不再必填（后端按检测方法自动匹配）
     const useDefaultProc = Form.useWatch("default", form);
+    // V6: 开启"清除批次"后走 batch=0（清回未分批），批次号输入框不再需要填
+    const clearBatch = Form.useWatch("clear_batch", form);
 
     // department/testing modules cannot operate on samples they didn't create
     const isSampleRestricted = (s) => {
@@ -276,6 +296,12 @@ const SampleBatchModal = ({
 
     // Per-sample summary for the no-tree "add" op (methodCreate).
     const sampleSummary = (s) => {
+        // V5: 设置批次对任何样品都成立，不按创建人置灰
+        if (operation?.value === "batchSet")
+            return {
+                disabled: false,
+                note: s.batch != null ? ` (当前第 ${s.batch} 批)` : " (未分批)",
+            };
         // V4: 生成重复样按 department_id / tester_id 隔离，与"是否本人创建"无关，不置灰
         if (operation?.value !== "duplicate" && isSampleRestricted(s))
             return { disabled: true, note: " (非本人创建)" };
@@ -294,9 +320,12 @@ const SampleBatchModal = ({
     //     做权限隔离，而不是按创建人 —— 若沿用 editableSamples，管理组下发的普通样
     //     （creator_id 为空）会被整体排除，而它们恰恰是最需要复制的对象。
     //     另外后端只会从中挑出普通样(type=0)，这里同步过滤掉质控样以免误导。
+    // V5: 设置批次(batchSet) 只写 samples.batch，与创建人、样品类型都无关 ——
+    //     直接作用于全部勾选的样品。
     const targetSamples = useMemo(() => {
         if (operation?.value === "duplicate")
             return samples.filter((s) => s.type === 0 || s.type === undefined);
+        if (operation?.value === "batchSet") return samples;
         return editableSamples;
     }, [operation, samples, editableSamples]);
 
@@ -543,6 +572,10 @@ const SampleBatchModal = ({
                 ]);
             else if (operation.value === "duplicate")
                 await form.validateFields(["ratio"]);
+            // V5: 设置批次需要一个 ≥1 的批次号
+            // V6: 勾选"清除批次"时走 batch=0，不需要校验批次号
+            else if (operation.value === "batchSet" && !clearBatch)
+                await form.validateFields(["batch"]);
             else if (operation.value === "distribute")
                 await form.validateFields([
                     module === "workflow" ? "department_id" : "tester_id",
@@ -614,6 +647,18 @@ const SampleBatchModal = ({
                             sample_ids: sampleIds,
                             ratio: details.ratio,
                             description: details.description || "",
+                        }),
+                    );
+                }
+            } else if (operation.value === "batchSet") {
+                // V5: batchSet 请求 { sample_ids, batch }。
+                // V6: batch 传 0 表示清除批次（改回「未分批」/NULL），传 ≥1 仍为设置批次。
+                const sampleIds = targetSamples.map((s) => s.id);
+                if (sampleIds.length) {
+                    promises.push(
+                        api.batchSet({
+                            sample_ids: sampleIds,
+                            batch: details.clear_batch ? 0 : details.batch,
                         }),
                     );
                 }
@@ -830,6 +875,68 @@ const SampleBatchModal = ({
                     ) : null}
 
                     {/* Detail area */}
+                    {/* V5: 设置批次 —— batchSet 请求 { sample_ids, batch } */}
+                    {/* V6: batch 传 0 = 清除批次（改回「未分批」），传 ≥1 = 设置批次 */}
+                    {operation.value === "batchSet" && (
+                        <>
+                            <Divider className="my-3" />
+                            <Alert
+                                type="warning"
+                                showIcon
+                                className="mb-4 rounded-lg text-xs"
+                                message={
+                                    clearBatch
+                                        ? "将把所选样品的批次全部清除，改回「未分批」。"
+                                        : "将把所选样品全部改为该批次（覆盖原有批次）。"
+                                }
+                            />
+                            {/* V6: 清除批次开关 —— 打开后提交 batch: 0 */}
+                            <Form.Item
+                                name="clear_batch"
+                                valuePropName="checked"
+                                label={
+                                    <span className="font-black text-slate-700">
+                                        清除批次
+                                    </span>
+                                }
+                                tooltip="打开后提交 batch=0，把所选样品改回「未分批」；关闭则按下方批次号设置。"
+                            >
+                                <Switch
+                                    checkedChildren="清除"
+                                    unCheckedChildren="设置"
+                                />
+                            </Form.Item>
+                            {!clearBatch && (
+                                <Form.Item
+                                    name="batch"
+                                    label={
+                                        <span className="font-black text-slate-700">
+                                            批次号
+                                        </span>
+                                    }
+                                    tooltip="批次号为 ≥1 的整数；要改回「未分批」请打开上方的「清除批次」。"
+                                    rules={[
+                                        {
+                                            required: true,
+                                            message: "请输入批次号",
+                                        },
+                                        {
+                                            type: "number",
+                                            min: 1,
+                                            message: "批次号必须不小于 1",
+                                        },
+                                    ]}
+                                >
+                                    <InputNumber
+                                        min={1}
+                                        precision={0}
+                                        className="w-full"
+                                    />
+                                </Form.Item>
+                            )}
+                        </>
+                    )}
+
                     {operation.value === "methodCreate" && (
                         <>
                             <Divider className="my-3" />

@@ -57,13 +57,16 @@ import {
     rejectSample,
 } from "../../../api/workflow";
 import { comboTestItem } from "../../../api/testItem";
-import { comboReferenceMaterial } from "../../../api/referenceMaterial";
+// V5: 参比样改指「标准样品」—— 下拉源由 ReferenceMaterial/combo 换成 ReferenceSample/combo
+import { comboReferenceSample } from "../../../api/referenceSample";
 // V4: 样品新增 processor_id（加工责任人），列表/详情需按 ID 显示姓名
 import { comboUser } from "../../../api/user";
 
 import AddEdit from "../../../components/SampleManager/AddEdit";
 import DetailDrawer from "../../../components/SampleManager/DetailDrawer";
 import SpecialSampleModal from "../../../components/SampleManager/modals/SpecialSampleModal";
+// V5: 批次筛选器（0=未分批 / N=第N批 / 空=全部），四个样品中心共用
+import BatchFilter from "../../../components/SampleManager/BatchFilter";
 import SampleBatchModal, {
     getOperations,
 } from "../../../components/SampleManager/modals/SampleBatchModal";
@@ -117,7 +120,9 @@ const SampleList = () => {
                 danger: op.value.includes("Delete") || op.value === "reject",
                 // V4: 未勾选样品时不再直接拦下，改为确认后作用于整个任务 ——
                 //     原来顶部单独的"批量操作此任务"下拉已取消，两条路径合并到这里。
-                allowEmptySelection: true,
+                // V5: 「设置批次」(batchSet) 只接受 sample_ids，没有 task_id 整任务变体，
+                //     所以它保留"必须先勾选样品"的行为。
+                allowEmptySelection: !op.requireSelection,
                 onClick: (rows) => {
                     if (!rows.length) {
                         Modal.confirm({
@@ -141,6 +146,18 @@ const SampleList = () => {
     );
 
     const [showIds, setShowIds] = useState({});
+
+    // V5: read 接口新增两个可选筛选参数 —— batch（0=未分批 / N=第N批 / 不传=全部）
+    //     与 type（0~3 样品类型；WorkflowManager/Sample/read 独有）。
+    const [filters, setFilters] = useState({ batch: null, type: null });
+
+    // 下拉里预置当前页出现过的批次号，常用批次一键可选（任意批次可在下拉底部输入）
+    const knownBatches = useMemo(() => {
+        const set = new Set(
+            samples.map((s) => s.batch).filter((b) => b != null),
+        );
+        return Array.from(set).sort((a, b) => a - b);
+    }, [samples]);
 
     // V4: {userId: 姓名} —— 样品行只带 processor_id，这里拉一次用户下拉把 ID 翻成姓名，
     //     列表的"加工人"列与详情抽屉共用同一份映射，避免每行/每次开抽屉都发请求。
@@ -278,6 +295,26 @@ const SampleList = () => {
                 },
             },
             {
+                // V5: 新增批次列 —— samples.batch，null 表示未分批
+                title: "批次",
+                dataIndex: "batch",
+                width: 90,
+                render: (batch) =>
+                    batch == null ? (
+                        <span className="text-slate-300 italic text-xs">
+                            未分批
+                        </span>
+                    ) : (
+                        <Tag
+                            color="geekblue"
+                            bordered={false}
+                            className="m-0 font-bold"
+                        >
+                            第 {batch} 批
+                        </Tag>
+                    ),
+            },
+            {
                 // V4: 质控样的 client_code 改由后端 helper.frankID() 自动生成，是一串对用户
                 //     没有意义的编号 —— 空白样/标准样/重复样这一列不再显示它，统一显示类型名，
                 //     并把标准物质名称、父样品编号接在同一行；只有普通样才显示真正的客户样号。
@@ -302,11 +339,12 @@ const SampleList = () => {
                                             )}
                                         </span>
                                     )}
+                                {/* V5: 响应字段 reference_material_name → reference_sample_name */}
                                 {record.type === 2 &&
-                                    record.reference_material_name && (
+                                    record.reference_sample_name && (
                                         <span className="text-[12px] text-purple-600 font-bold flex items-center gap-1">
                                             <StarOutlined />
-                                            {record.reference_material_name}
+                                            {record.reference_sample_name}
                                         </span>
                                     )}
                             </div>
@@ -395,13 +433,54 @@ const SampleList = () => {
                         data: { status: 0, data: { rows: [], total: 0 } },
                     });
                 }
-                return readSample({ ...params, task_id: taskId });
+                // V5: batch / type 为空表示不过滤，因此为空时不带该字段
+                //     （batch=0 是"仅未分批"的有效取值，不能被当成空值丢掉）
+                const payload = { ...params, task_id: taskId };
+                if (filters.batch != null) payload.batch = filters.batch;
+                if (filters.type != null) payload.type = filters.type;
+                return readSample(payload);
             },
             create: (data) => createSample({ ...data, task_id: taskId }),
             update: updateSample,
             delete: deleteSample,
         }),
-        [taskId],
+        [taskId, filters],
+    );
+
+    // V5: 顶部已激活筛选条的展示配置（CrudTable 用它渲染可一键清除的标签）
+    const filterConfig = useMemo(
+        () => ({
+            batch: {
+                label: "批次",
+                options: [
+                    { label: "未分批", value: 0 },
+                    ...knownBatches.map((b) => ({
+                        label: `第 ${b} 批`,
+                        value: b,
+                    })),
+                    ...(filters.batch != null &&
+                    filters.batch !== 0 &&
+                    !knownBatches.includes(filters.batch)
+                        ? [
+                              {
+                                  label: `第 ${filters.batch} 批`,
+                                  value: filters.batch,
+                              },
+                          ]
+                        : []),
+                ],
+            },
+            type: {
+                label: "样品类型",
+                options: Object.fromEntries(
+                    Object.entries(SampleTypeMap).map(([k, v]) => [
+                        k,
+                        v.label,
+                    ]),
+                ),
+            },
+        }),
+        [knownBatches, filters.batch],
     );
 
     const initialValues = useMemo(
@@ -410,7 +489,10 @@ const SampleList = () => {
             client_code: "",
             type: 0,
             parent_id: null,
-            reference_material_id: null,
+            // V5: reference_material_id → reference_sample_id（参比样指向标准样品）
+            reference_sample_id: null,
+            // V5: 新增批次字段，null = 未分批
+            batch: null,
             description: "",
         }),
         [taskId],
@@ -451,7 +533,8 @@ const SampleList = () => {
             distribute: distributeSample,
             referenceSample: referenceSample,
             comboTask: comboTask,
-            comboReferenceMaterial: comboReferenceMaterial,
+            // V5: 参比样下拉源换成标准样品
+            comboReferenceSample: comboReferenceSample,
             distributeType: "department",
             approveMethod: approveSample,
             rejectMethod: rejectSample,
@@ -690,15 +773,61 @@ const SampleList = () => {
                                     batchActions={batchActions}
                                     batchDropdown
                                     actionExtra={
-                                        <Button
-                                            icon={<ExperimentOutlined />}
-                                            onClick={() =>
-                                                setSpecialSampleVisible(true)
-                                            }
-                                            className="rounded-xl font-bold border-purple-100 text-purple-600 bg-purple-50"
-                                        >
-                                            添加特殊样品
-                                        </Button>
+                                        // V5: 这一行新增了批次/类型筛选器，窄屏需允许换行
+                                        <Space wrap>
+                                            {/* V5: 批次筛选（read 的 batch 参数） */}
+                                            <BatchFilter
+                                                value={filters.batch}
+                                                knownBatches={knownBatches}
+                                                onChange={(val) =>
+                                                    setFilters((prev) => ({
+                                                        ...prev,
+                                                        batch: val,
+                                                    }))
+                                                }
+                                            />
+                                            {/* V5: 样品类型筛选 —— 仅 WorkflowManager/Sample/read 支持 */}
+                                            <Select
+                                                allowClear
+                                                placeholder="样品类型"
+                                                style={{ width: 130 }}
+                                                value={filters.type}
+                                                onChange={(val) =>
+                                                    setFilters((prev) => ({
+                                                        ...prev,
+                                                        type: val ?? null,
+                                                    }))
+                                                }
+                                                options={Object.entries(
+                                                    SampleTypeMap,
+                                                ).map(([k, v]) => ({
+                                                    label: v.label,
+                                                    value: Number(k),
+                                                }))}
+                                            />
+                                            <Button
+                                                icon={<ExperimentOutlined />}
+                                                onClick={() =>
+                                                    setSpecialSampleVisible(
+                                                        true,
+                                                    )
+                                                }
+                                                className="rounded-xl font-bold border-purple-100 text-purple-600 bg-purple-50"
+                                            >
+                                                添加特殊样品
+                                            </Button>
+                                        </Space>
+                                    }
+                                    filterValues={filters}
+                                    filterConfig={filterConfig}
+                                    onClearFilter={(key) =>
+                                        setFilters((prev) => ({
+                                            ...prev,
+                                            [key]: null,
+                                        }))
+                                    }
+                                    onClearAll={() =>
+                                        setFilters({ batch: null, type: null })
                                     }
                                     renderActions={renderActions}
                                     onDataLoaded={setSamples}

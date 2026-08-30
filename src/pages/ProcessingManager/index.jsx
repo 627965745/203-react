@@ -28,6 +28,8 @@ import {
     StarOutlined,
 } from "@ant-design/icons";
 import CrudTable from "../../components/CrudTable";
+// V5: 批次筛选器（0=未分批 / N=第N批 / 空=全部），四个样品中心共用
+import BatchFilter from "../../components/SampleManager/BatchFilter";
 import {
     readTaskProcessingManager,
     readSampleProcessingManager,
@@ -42,7 +44,8 @@ const PhysicalStateMap = {
     2: { label: "气态", color: "purple" },
 };
 
-const CategoryMap = {
+// V6: tasks.category 改名为 commission_type（检测类别，取值不变），映射表同步更名
+const CommissionTypeMap = {
     0: { label: "委托检测", color: "cyan" },
     1: { label: "监督检测", color: "red" },
     2: { label: "其他", color: "default" },
@@ -84,6 +87,11 @@ const ProcessingManager = () => {
     const [taskId, setTaskId] = useState(null);
     const [selectedTask, setSelectedTask] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
+
+    // V5: read 接口新增可选 batch 筛选（0=未分批 / N=第N批 / 不传=全部）
+    const [filters, setFilters] = useState({ batch: null });
+    // 当前页样品，用于给批次下拉预置已出现过的批次号
+    const [samples, setSamples] = useState([]);
 
     // Task Drawer states
     const [taskDrawerVisible, setTaskDrawerVisible] = useState(true);
@@ -198,11 +206,16 @@ const ProcessingManager = () => {
                                             )}
                                         </span>
                                     )}
+                                {/* V5: 参比样响应字段改名为 reference_sample_name。
+                                    升级文档附录提到本接口一度仍返回旧字段名（后端注解称已修复），
+                                    这里两种字段名都兼容，避免联调期该列空白。 */}
                                 {record.type === 2 &&
-                                    record.reference_material_name && (
+                                    (record.reference_sample_name ||
+                                        record.reference_material_name) && (
                                         <span className="text-xs text-purple-600 font-bold flex items-center gap-1 truncate">
                                             <StarOutlined />
-                                            {record.reference_material_name}
+                                            {record.reference_sample_name ||
+                                                record.reference_material_name}
                                         </span>
                                     )}
                             </div>
@@ -217,6 +230,26 @@ const ProcessingManager = () => {
                         </div>
                     );
                 },
+            },
+            {
+                // V5: 新增批次列 —— samples.batch，null 表示未分批
+                title: "批次",
+                dataIndex: "batch",
+                width: 90,
+                render: (batch) =>
+                    batch == null ? (
+                        <span className="text-slate-300 italic text-xs">
+                            未分批
+                        </span>
+                    ) : (
+                        <Tag
+                            color="geekblue"
+                            bordered={false}
+                            className="m-0 font-bold"
+                        >
+                            第 {batch} 批
+                        </Tag>
+                    ),
             },
             {
                 // V4: 父样编号 / 标准物质已挪到「客户样号」列同一行显示，本列只留类型标签
@@ -375,13 +408,48 @@ const ProcessingManager = () => {
                     return Promise.resolve({
                         data: { status: 0, data: { rows: [], total: 0 } },
                     });
-                return readSampleProcessingManager({
-                    ...params,
-                    task_id: taskId,
-                });
+                // V5: batch 为空表示不过滤（batch=0 是"仅未分批"的有效取值，不能当空值丢掉）
+                const payload = { ...params, task_id: taskId };
+                if (filters.batch != null) payload.batch = filters.batch;
+                return readSampleProcessingManager(payload);
             },
         }),
-        [taskId],
+        [taskId, filters],
+    );
+
+    // 下拉里预置当前页出现过的批次号，常用批次一键可选（任意批次可在下拉底部输入）
+    const knownBatches = useMemo(() => {
+        const set = new Set(
+            samples.map((s) => s.batch).filter((b) => b != null),
+        );
+        return Array.from(set).sort((a, b) => a - b);
+    }, [samples]);
+
+    // V5: 顶部已激活筛选条的展示配置（CrudTable 用它渲染可一键清除的标签）
+    const filterConfig = useMemo(
+        () => ({
+            batch: {
+                label: "批次",
+                options: [
+                    { label: "未分批", value: 0 },
+                    ...knownBatches.map((b) => ({
+                        label: `第 ${b} 批`,
+                        value: b,
+                    })),
+                    ...(filters.batch != null &&
+                    filters.batch !== 0 &&
+                    !knownBatches.includes(filters.batch)
+                        ? [
+                              {
+                                  label: `第 ${filters.batch} 批`,
+                                  value: filters.batch,
+                              },
+                          ]
+                        : []),
+                ],
+            },
+        }),
+        [knownBatches, filters.batch],
     );
 
     const batchActions = useMemo(
@@ -401,19 +469,29 @@ const ProcessingManager = () => {
                     if (!rows.length) {
                         Modal.confirm({
                             title: "未勾选任何样品",
-                            content:
-                                "未勾选任何样品，「批量完成加工」将应用于当前任务下所有由您负责、且处于\"正在加工\"状态的样品，确定吗？",
+                            content: filters.batch
+                                ? `未勾选任何样品，「批量完成加工」将应用于当前任务【第 ${filters.batch} 批】中所有由您负责、且处于"正在加工"状态的样品，确定吗？`
+                                : '未勾选任何样品，「批量完成加工」将应用于当前任务下所有由您负责、且处于"正在加工"状态的样品，确定吗？',
                             okText: "确定",
                             cancelText: "取消",
                             onOk: async () => {
                                 try {
+                                    // V5: approve 也支持 batch（仅与 task_id 联用时生效）。
+                                    //     注意语义差异：read 的 batch=0 表示"未分批"，
+                                    //     而 approve 没有这层语义，所以 0 不能透传。
+                                    const payload = { task_id: taskId };
+                                    if (filters.batch) {
+                                        payload.batch = filters.batch;
+                                    }
                                     const res =
-                                        await approveSampleProcessingManager({
-                                            task_id: taskId,
-                                        });
+                                        await approveSampleProcessingManager(
+                                            payload,
+                                        );
                                     if (res.data.status === 0) {
                                         message.success(
-                                            "已完成该任务下所有待加工样品",
+                                            filters.batch
+                                                ? `已完成该任务第 ${filters.batch} 批的待加工样品`
+                                                : "已完成该任务下所有待加工样品",
                                         );
                                         clearSelection();
                                         refresh();
@@ -479,7 +557,8 @@ const ProcessingManager = () => {
                 },
             },
         ],
-        [taskId],
+        // V5: 任务级完成加工会带上当前筛选的批次，因此 filters 也是依赖
+        [taskId, filters],
     );
 
     const taskColumns = [
@@ -576,10 +655,11 @@ const ProcessingManager = () => {
         },
         {
             title: "检测类别",
-            dataIndex: "category",
+            // V6: 列绑定由 category 改为 commission_type（Task/read 响应字段改名）
+            dataIndex: "commission_type",
             width: 110,
             render: (val) => {
-                const item = CategoryMap[val];
+                const item = CommissionTypeMap[val];
                 return item ? (
                     <Tag color={item.color} className="rounded-md">
                         {item.label}
@@ -747,6 +827,29 @@ const ProcessingManager = () => {
                                     hideSearch
                                     hideAction
                                     batchActions={batchActions}
+                                    // V5: 批次筛选（read 的 batch 参数）
+                                    actionExtra={
+                                        <BatchFilter
+                                            value={filters.batch}
+                                            knownBatches={knownBatches}
+                                            onChange={(val) =>
+                                                setFilters((prev) => ({
+                                                    ...prev,
+                                                    batch: val,
+                                                }))
+                                            }
+                                        />
+                                    }
+                                    filterValues={filters}
+                                    filterConfig={filterConfig}
+                                    onClearFilter={(key) =>
+                                        setFilters((prev) => ({
+                                            ...prev,
+                                            [key]: null,
+                                        }))
+                                    }
+                                    onClearAll={() => setFilters({ batch: null })}
+                                    onDataLoaded={setSamples}
                                     defaultPageSize={20}
                                     fillHeight
                                 />

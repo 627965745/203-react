@@ -1,23 +1,28 @@
 import React, { useState } from 'react';
-import { Modal, Table, Button, message, Space, Tag, Popconfirm, Divider } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, AuditOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { Modal, Button, message, Space, Tag, Popconfirm } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, AuditOutlined, InfoCircleOutlined, BarcodeOutlined } from '@ant-design/icons';
+import { ResultFieldGrid } from '../ResultDetail';
 
+// V6: 审核界面由表格改为卡片式 —— 与「查看数据」(ResultEntryModal 只读态) 保持同一套视觉语言。
+//     原来的表格把「录入结果」压在一个固定宽度的列里，字段一多就纵向堆叠、横向留白浪费；
+//     改成每个方法一张卡片后，结果字段可以铺满整行宽度，并且能顺带展示 V5 的检测设备与
+//     V6 的实验时间（表格里没有位置放这两项）。
 const ReviewModal = ({ open, onCancel, onSuccess, data, apis = {}, rejectDescription }) => {
     const [actionLoading, setActionLoading] = useState({});
     const { approve, reject } = apis;
 
     // V3: data structure: { sampleIds, details: [{ labCode, methodName, methodId, itemId, itemName, results: [...] }] }
     //     item 与 method 强绑定；同一 methodId 在不同 item 下可重复出现，因此下面所有按方法
-    //     索引的 state/rowKey 都必须用 "itemId-methodId" 组合键，不能再用裸 methodId。
+    //     索引的 state/key 都必须用 "itemId-methodId" 组合键，不能再用裸 methodId。
     const { sampleIds = [], details = [] } = data || {};
-    const rowKeyOf = (record) => `${record.itemId}-${record.methodId}`;
+    const keyOf = (record) => `${record.itemId}-${record.methodId}`;
     const [processedMethods, setProcessedMethods] = useState({}); // { "itemId-methodId": 'approve' | 'reject' }
 
     const handleAction = async (record, type) => {
         const api = type === 'approve' ? approve : reject;
         if (!api) return;
 
-        const key = rowKeyOf(record);
+        const key = keyOf(record);
         setActionLoading(prev => ({ ...prev, [`${key}-${type}`]: true }));
         try {
             const res = await api({
@@ -40,121 +45,82 @@ const ReviewModal = ({ open, onCancel, onSuccess, data, apis = {}, rejectDescrip
         }
     };
 
-    const columns = [
-        {
-            title: '实验室编号',
-            dataIndex: 'labCode',
-            key: 'labCode',
-            width: 120,
-            render: (text) => <span className="font-mono font-bold text-slate-700">{text}</span>
-        },
-        {
-            title: '检测项目 / 方法',
-            key: 'info',
-            render: (_, record) => (
-                // V3: item 与 method 强绑定，标签内一并展示所属检测项目
-                <div className="flex items-center gap-2">
-                    <Tag color="blue" className="m-0 border-none font-bold text-[11px]">
-                        {record.itemName ? `${record.itemName} / ${record.methodName}` : record.methodName}
-                    </Tag>
-                </div>
-            )
-        },
-        {
-            title: '录入结果',
-            dataIndex: 'results',
-            key: 'results',
-            width: 350,
-            render: (results) => (
-                <div className="flex flex-col gap-1">
-                    {results && results.length > 0 ? (
-                        results.map((r, i) => (
-                            <div key={i} className="flex items-start bg-slate-50 px-3 py-1.5 rounded border border-slate-100 text-[14px]">
-                                <span className="text-slate-500 mr-2 min-w-[60px] shrink-0 pt-[1px]">{r.name}:</span>
-                                <span className="font-bold text-slate-800 break-words whitespace-pre-wrap flex-1 min-w-0">{r.value}</span>
-                            </div>
-                        ))
-                    ) : (
-                        <span className="text-xs text-slate-300 italic">无数据</span>
-                    )}
-                </div>
-            )
-        },
-        {
-            title: '操作',
-            key: 'actions',
-            fixed: 'right',
-            width: 160,
-            render: (_, record) => {
-                const key = rowKeyOf(record);
-                const status = processedMethods[key];
+    // 卡片右上角：未处理时是两个操作按钮，处理过后换成结果状态条
+    const renderActions = (record) => {
+        const key = keyOf(record);
+        const status = processedMethods[key];
 
-                if (status === 'approve') {
-                    return (
-                        <div className="flex items-center gap-1.5 text-green-600 font-bold text-xs bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">
-                            <CheckCircleOutlined />
-                            <span>已通过</span>
-                        </div>
-                    );
-                }
-                
-                if (status === 'reject') {
-                    return (
-                        <div className="flex items-center gap-1.5 text-red-500 font-bold text-xs bg-red-50 px-3 py-1.5 rounded-lg border border-red-100">
-                            <CloseCircleOutlined />
-                            <span>已驳回</span>
-                        </div>
-                    );
-                }
-
-                return (
-                    <Space>
-                        <Popconfirm
-                            title="确认通过审核？"
-                            onConfirm={() => handleAction(record, 'approve')}
-                            okText="通过"
-                            cancelText="取消"
-                        >
-                            <Button
-                                type="primary"
-                                size="small"
-                                icon={<CheckCircleOutlined />}
-                                loading={actionLoading[`${key}-approve`]}
-                                className="bg-green-600 hover:bg-green-700 border-none text-[11px] h-7 rounded-lg"
-                            >
-                                通过
-                            </Button>
-                        </Popconfirm>
-                        <Popconfirm
-                            title="确认驳回该结果？"
-                            description={rejectDescription || "驳回后检测员将需要重新录入数据。"}
-                            onConfirm={() => handleAction(record, 'reject')}
-                            okText="驳回"
-                            cancelText="取消"
-                            okButtonProps={{ danger: true }}
-                        >
-                            <Button
-                                danger
-                                size="small"
-                                icon={<CloseCircleOutlined />}
-                                loading={actionLoading[`${key}-reject`]}
-                                className="text-[11px] h-7 rounded-lg"
-                            >
-                                驳回
-                            </Button>
-                        </Popconfirm>
-                    </Space>
-                );
-            }
+        if (status === 'approve') {
+            return (
+                <div className="flex items-center gap-1.5 text-green-600 font-bold text-xs bg-green-50 px-3 py-1.5 rounded-lg border border-green-100 shrink-0">
+                    <CheckCircleOutlined />
+                    <span>已通过</span>
+                </div>
+            );
         }
-    ];
+
+        if (status === 'reject') {
+            return (
+                <div className="flex items-center gap-1.5 text-red-500 font-bold text-xs bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shrink-0">
+                    <CloseCircleOutlined />
+                    <span>已驳回</span>
+                </div>
+            );
+        }
+
+        return (
+            <Space className="shrink-0">
+                <Popconfirm
+                    title="确认通过审核？"
+                    onConfirm={() => handleAction(record, 'approve')}
+                    okText="通过"
+                    cancelText="取消"
+                >
+                    <Button
+                        type="primary"
+                        size="small"
+                        icon={<CheckCircleOutlined />}
+                        loading={actionLoading[`${key}-approve`]}
+                        className="bg-green-600 hover:bg-green-700 border-none text-[11px] h-7 rounded-lg font-bold"
+                    >
+                        通过
+                    </Button>
+                </Popconfirm>
+                <Popconfirm
+                    title="确认驳回该结果？"
+                    description={rejectDescription || "驳回后检测员将需要重新录入数据。"}
+                    onConfirm={() => handleAction(record, 'reject')}
+                    okText="驳回"
+                    cancelText="取消"
+                    okButtonProps={{ danger: true }}
+                >
+                    <Button
+                        danger
+                        size="small"
+                        icon={<CloseCircleOutlined />}
+                        loading={actionLoading[`${key}-reject`]}
+                        className="text-[11px] h-7 rounded-lg font-bold"
+                    >
+                        驳回
+                    </Button>
+                </Popconfirm>
+            </Space>
+        );
+    };
 
     return (
         <Modal
             title={
                 <div className="flex items-center gap-2">
-                    <AuditOutlined className="text-blue-500" />
-                    <span>实验数据审核</span>
+                    <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+                        <AuditOutlined className="text-blue-500" />
+                    </div>
+                    <div>
+                        <div className="text-base font-black text-slate-800">实验数据审核</div>
+                        <div className="text-[10px] text-slate-400 font-normal">
+                            共 {details.length} 项待核对
+                        </div>
+                    </div>
                 </div>
             }
             open={open}
@@ -162,28 +128,51 @@ const ReviewModal = ({ open, onCancel, onSuccess, data, apis = {}, rejectDescrip
             footer={[
                 <Button key="close" onClick={onCancel} className="rounded-lg">关闭</Button>
             ]}
-            width={850}
-            destroyOnClose
+            width={720}
+            destroyOnHidden
             centered
         >
-            <div className="mb-4">
-                <div className="flex items-center gap-2 text-xs text-slate-400 mb-2">
-                    <InfoCircleOutlined className="text-blue-400" />
-                    <span>请仔细核对实验数据，通过后将进入报告生成环节。</span>
-                </div>
-                <Divider className="my-2" />
+            <div className="flex items-center gap-2 text-xs text-slate-400 mb-3">
+                <InfoCircleOutlined className="text-blue-400" />
+                <span>请仔细核对实验数据，通过后将进入报告生成环节。</span>
             </div>
 
-            <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
-                <Table
-                    dataSource={details}
-                    columns={columns}
-                    pagination={false}
-                    rowKey={rowKeyOf}
-                    size="small"
-                    scroll={{ x: 'max-content' }}
-                    className="review-table"
-                />
+            {/* V6: 每个「检测项目 / 方法」一张卡片，取代原先的一行表格 */}
+            <div className="flex flex-col gap-4 max-h-[62vh] overflow-y-auto pr-1">
+                {details.map((record, idx) => (
+                    <div
+                        key={keyOf(record) || idx}
+                        className="rounded-2xl border border-slate-200 overflow-hidden"
+                    >
+                        {/* 卡片头：样品编号 + 检测项目/方法 + 操作 */}
+                        <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                    <BarcodeOutlined className="text-slate-400 text-xs" />
+                                    <span className="font-mono font-bold text-slate-700">
+                                        {record.labCode}
+                                    </span>
+                                </div>
+                                {/* V3: item 与 method 强绑定，标签内一并展示所属检测项目 */}
+                                <Tag color="blue" className="mt-1.5 m-0 border-none font-bold text-[11px] max-w-full whitespace-normal break-words">
+                                    {record.itemName ? `${record.itemName} / ${record.methodName}` : record.methodName}
+                                </Tag>
+                            </div>
+                            {renderActions(record)}
+                        </div>
+
+                        {/* 卡片体：结果字段，每个字段各自带 V5 检测设备 + V6 实验时间。
+                            V6.1: 不再显示方法级的汇总行 —— 审核要逐条核对"这个值是哪台仪器、
+                            哪天做的"，即使整组一致也要标在各字段下面。 */}
+                        <div className="px-4 py-3">
+                            <ResultFieldGrid
+                                results={record.results}
+                                emptyText="该方法暂无录入数据"
+                                alwaysShowMeta
+                            />
+                        </div>
+                    </div>
+                ))}
             </div>
         </Modal>
     );

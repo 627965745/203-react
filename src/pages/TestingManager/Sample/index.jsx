@@ -12,6 +12,7 @@ import {
     Spin,
     Divider,
     Modal,
+    Segmented,
 } from "antd";
 import {
     BarcodeOutlined,
@@ -52,7 +53,8 @@ import {
     templateTestingSample,
     referenceTestingSample,
 } from "../../../api/testing";
-import { comboReferenceMaterial } from "../../../api/referenceMaterial";
+// V5: 参比样改指「标准样品」—— 下拉源由 ReferenceMaterial/combo 换成 ReferenceSample/combo
+import { comboReferenceSample } from "../../../api/referenceSample";
 
 import AddEdit from "../../../components/SampleManager/AddEdit";
 import DetailDrawer from "../../../components/SampleManager/DetailDrawer";
@@ -61,6 +63,8 @@ import SampleBatchModal, {
 } from "../../../components/SampleManager/modals/SampleBatchModal";
 import TaskBatchModal from "../../../components/SampleManager/modals/TaskBatchModal";
 import SpecialSampleModal from "../../../components/SampleManager/modals/SpecialSampleModal";
+// V5: 批次筛选器（0=未分批 / N=第N批 / 空=全部），四个样品中心共用
+import BatchFilter from "../../../components/SampleManager/BatchFilter";
 import DownloadTemplateModal from "./DownloadTemplateModal";
 import UploadDataModal from "./UploadDataModal";
 
@@ -77,6 +81,10 @@ const TestingSampleList = () => {
     const [taskId, setTaskId] = useState(null);
     const [selectedTask, setSelectedTask] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
+
+    // V5: read 接口新增可选 batch 筛选（0=未分批 / N=第N批 / 不传=全部）
+    // V6: read 接口新增可选 is_creator（0/1，不传同 0）—— 1 = 仅返回我创建的样品
+    const [filters, setFilters] = useState({ batch: null, is_creator: null });
 
     // Task Drawer states
     const [taskDrawerVisible, setTaskDrawerVisible] = useState(true);
@@ -111,7 +119,9 @@ const TestingSampleList = () => {
                 danger: op.value === "reject",
                 // V4: 未勾选样品时不再直接拦下，改为确认后作用于整个任务 ——
                 //     原来顶部单独的"批量操作此任务"下拉已取消，两条路径合并到这里。
-                allowEmptySelection: true,
+                // V5: 标了 requireSelection 的操作（如「设置批次」）只接受 sample_ids，
+                //     没有 task_id 整任务变体，必须先勾选样品
+                allowEmptySelection: !op.requireSelection,
                 onClick: (rows) => {
                     if (!rows.length) {
                         Modal.confirm({
@@ -155,7 +165,8 @@ const TestingSampleList = () => {
             comboTask: readTestingTask,
             templateSample: templateTestingSample,
             referenceSample: referenceTestingSample,
-            comboReferenceMaterial: comboReferenceMaterial,
+            // V5: 参比样下拉源换成标准样品
+            comboReferenceSample: comboReferenceSample,
             onSuccess: () => setRefreshKey((prev) => prev + 1),
         }),
         [],
@@ -267,6 +278,26 @@ const TestingSampleList = () => {
                 ),
             },
             {
+                // V5: 新增批次列 —— samples.batch，null 表示未分批
+                title: "批次",
+                dataIndex: "batch",
+                width: 90,
+                render: (batch) =>
+                    batch == null ? (
+                        <span className="text-slate-300 italic text-xs">
+                            未分批
+                        </span>
+                    ) : (
+                        <Tag
+                            color="geekblue"
+                            bordered={false}
+                            className="m-0 font-bold"
+                        >
+                            第 {batch} 批
+                        </Tag>
+                    ),
+            },
+            {
                 // V4: 质控样的 client_code 由后端自动生成、对用户没有意义，本列不显示它 ——
                 //     类型标签之后同一行接上标准样的标准物质名称、重复样的父样品编号。
                 title: "样品类型",
@@ -292,10 +323,11 @@ const TestingSampleList = () => {
                                     )}
                                 </span>
                             )}
-                            {type === 2 && record.reference_material_name && (
+                            {/* V5: 响应字段 reference_material_name → reference_sample_name */}
+                            {type === 2 && record.reference_sample_name && (
                                 <span className="text-[12px] text-purple-600 font-bold flex items-center gap-1">
                                     <StarOutlined />
-                                    {record.reference_material_name}
+                                    {record.reference_sample_name}
                                 </span>
                             )}
                         </div>
@@ -333,12 +365,57 @@ const TestingSampleList = () => {
                     return Promise.resolve({
                         data: { status: 0, data: { rows: [], total: 0 } },
                     });
-                return readTestingSample({ ...params, task_id: taskId });
+                // V5: batch 为空表示不过滤（batch=0 是"仅未分批"的有效取值，不能当空值丢掉）
+                const payload = { ...params, task_id: taskId };
+                if (filters.batch != null) payload.batch = filters.batch;
+                // V6: is_creator 只在选中「只看我创建的」时下发；0 与不传等价，不必发送
+                if (filters.is_creator === 1) payload.is_creator = 1;
+                return readTestingSample(payload);
             },
             update: updateTestingSample,
             delete: deleteTestingSample,
         }),
-        [taskId],
+        [taskId, filters],
+    );
+
+    // 下拉里预置当前页出现过的批次号，常用批次一键可选（任意批次可在下拉底部输入）
+    const knownBatches = useMemo(() => {
+        const set = new Set(
+            samples.map((s) => s.batch).filter((b) => b != null),
+        );
+        return Array.from(set).sort((a, b) => a - b);
+    }, [samples]);
+
+    // V5: 顶部已激活筛选条的展示配置（CrudTable 用它渲染可一键清除的标签）
+    const filterConfig = useMemo(
+        () => ({
+            batch: {
+                label: "批次",
+                options: [
+                    { label: "未分批", value: 0 },
+                    ...knownBatches.map((b) => ({
+                        label: `第 ${b} 批`,
+                        value: b,
+                    })),
+                    ...(filters.batch != null &&
+                    filters.batch !== 0 &&
+                    !knownBatches.includes(filters.batch)
+                        ? [
+                              {
+                                  label: `第 ${filters.batch} 批`,
+                                  value: filters.batch,
+                              },
+                          ]
+                        : []),
+                ],
+            },
+            // V6: 「只看我创建的」筛选（read 的 is_creator 参数）
+            is_creator: {
+                label: "范围",
+                options: [{ label: "只看我创建的", value: 1 }],
+            },
+        }),
+        [knownBatches, filters.batch],
     );
 
     const initialValues = useMemo(
@@ -549,6 +626,9 @@ const TestingSampleList = () => {
                                         <AddEdit
                                             {...props}
                                             apis={testingApis}
+                                            // V6.1: 该模块的 Sample/update 后端不写入 batch
+                                            //     （实测收下就丢），批次号置灰只读
+                                            batchEditable={false}
                                         />
                                     )}
                                     initialValues={initialValues}
@@ -566,7 +646,54 @@ const TestingSampleList = () => {
                                     batchActions={batchActions}
                                     batchDropdown
                                     actionExtra={
-                                        <Space>
+                                        // V5: 这一行新增了批次/类型筛选器，窄屏需允许换行
+                                        <Space wrap>
+                                            {/* V5: 批次筛选（read 的 batch 参数） */}
+                                            <BatchFilter
+                                                value={filters.batch}
+                                                knownBatches={knownBatches}
+                                                onChange={(val) =>
+                                                    setFilters((prev) => ({
+                                                        ...prev,
+                                                        batch: val,
+                                                    }))
+                                                }
+                                            />
+                                            {/* V6: 创建人筛选（read 的 is_creator 参数）——
+                                                全部 = 不传（分配给我的方法的样品 或 我创建的样品）；
+                                                只看我创建的 = is_creator:1 */}
+                                            <Tooltip title="全部=分配给我的样品+我创建的样品；只看我创建的=仅我创建的样品">
+                                                <Segmented
+                                                    size="middle"
+                                                    value={
+                                                        filters.is_creator === 1
+                                                            ? 1
+                                                            : 0
+                                                    }
+                                                    onChange={(val) =>
+                                                        setFilters((prev) => ({
+                                                            ...prev,
+                                                            is_creator:
+                                                                val === 1
+                                                                    ? 1
+                                                                    : null,
+                                                        }))
+                                                    }
+                                                    options={[
+                                                        {
+                                                            label: "全部",
+                                                            value: 0,
+                                                        },
+                                                        {
+                                                            label: "只看我创建的",
+                                                            value: 1,
+                                                            icon: (
+                                                                <UserOutlined />
+                                                            ),
+                                                        },
+                                                    ]}
+                                                />
+                                            </Tooltip>
                                             <Button
                                                 icon={<ExperimentOutlined />}
                                                 onClick={() =>
@@ -599,6 +726,20 @@ const TestingSampleList = () => {
                                                 上传数据
                                             </Button>
                                         </Space>
+                                    }
+                                    filterValues={filters}
+                                    filterConfig={filterConfig}
+                                    onClearFilter={(key) =>
+                                        setFilters((prev) => ({
+                                            ...prev,
+                                            [key]: null,
+                                        }))
+                                    }
+                                    onClearAll={() =>
+                                        setFilters({
+                                            batch: null,
+                                            is_creator: null,
+                                        })
                                     }
                                     onDataLoaded={setSamples}
                                     fillHeight
@@ -692,6 +833,9 @@ const TestingSampleList = () => {
                     setRefreshKey((prev) => prev + 1);
                 }}
                 apis={testingApis}
+                // V6.1: 该模块的 Sample/reference 后端不写入 batch（实测收下就丢），
+                //     所以不显示批次号输入框；后端修好后删掉这一行即可。
+                supportsBatch={false}
             />
 
             <DownloadTemplateModal
@@ -701,9 +845,12 @@ const TestingSampleList = () => {
                 taskLabCode={selectedTask?.lab_code}
             />
 
+            {/* V5: 上传弹窗需要 taskId 才能列出本任务的检测项目/方法，
+                进而按结果字段登记设备（device_ids） */}
             <UploadDataModal
                 open={uploadModalVisible}
                 onCancel={() => setUploadModalVisible(false)}
+                taskId={taskId}
                 onSuccess={() => {
                     setRefreshKey((prev) => prev + 1);
                 }}

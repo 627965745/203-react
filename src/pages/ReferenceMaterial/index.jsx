@@ -14,7 +14,6 @@ import {
 import {
     SearchOutlined,
     ExperimentOutlined,
-    SettingOutlined,
     PlusSquareOutlined,
     InfoCircleOutlined,
 } from "@ant-design/icons";
@@ -26,15 +25,18 @@ import {
     deleteReferenceMaterial,
 } from "../../api/referenceMaterial";
 import { comboReferenceMaterialMediumType } from "../../api/referenceMaterialMediumType";
+// V5: 浓度/不确定度统一为 0~1 float（最多 8 位小数），列表里用科学计数法展示
+import { formatScientific } from "../../utils/scientific";
 import AddEdit from "./AddEdit";
-import ComponentModal from "./ComponentModal";
+// V5: 成分管理已迁至「标准样品」(ReferenceSample) 模块，本页不再有成分 Tab / 弹窗
 import PrepareModal from "./PrepareModal";
 import UseModal from "./UseModal";
 
+// V5: 本模块收窄为「标准溶液 / 基准试剂」—— category 语义由 0标准物质/1标准溶液/2基准试剂
+//     改为 0标准溶液 / 1基准试剂；原 category=0「标准物质」已迁至 ReferenceSample 模块。
 const CategoryMap = {
-    0: { label: "标准物质", color: "blue" },
-    1: { label: "标准溶液", color: "green" },
-    2: { label: "基准试剂", color: "orange" },
+    0: { label: "标准溶液", color: "green" },
+    1: { label: "基准试剂", color: "orange" },
 };
 
 const StageMap = {
@@ -62,7 +64,7 @@ const ReferenceMaterialList = () => {
     const [mediumOptions, setMediumOptions] = useState([]);
 
     // Modal States
-    const [componentModalVisible, setComponentModalVisible] = useState(false);
+    // V5: componentModalVisible 已移除 —— 成分管理迁至 ReferenceSample
     const [prepareModalVisible, setPrepareModalVisible] = useState(false);
     const [useModalVisible, setUseModalVisible] = useState(false);
     const [activeRecord, setActiveRecord] = useState(null);
@@ -103,13 +105,13 @@ const ReferenceMaterialList = () => {
                         <Tooltip
                             title={
                                 <div className="py-1">
-                                    <div className="font-bold border-b border-white/20 mb-1 pb-1 text-[12px]">
+                                    <div className="font-bold border-b border-white/20 mb-1 pb-1 text-[14px]">
                                         来源构成:
                                     </div>
                                     {record.parents.map((s, idx) => (
                                         <div
                                             key={idx}
-                                            className="text-[12px] leading-relaxed"
+                                            className="text-[14px] leading-relaxed"
                                         >
                                             • {s.name}{" "}
                                             <span className="opacity-70">
@@ -199,21 +201,28 @@ const ReferenceMaterialList = () => {
             },
         },
         {
-            title: "不确定度 / 质量浓度",
+            // V5: 响应删除 mass_concentration，新增 concentration（浓度%）——
+            //     concentration 与 uncertainty 现均为必填
+            title: "浓度 / 不确定度",
             width: 140,
             render: (_, record) => (
                 <div className="text-xs space-y-0.5">
                     <div className="flex justify-between w-full">
-                        <span className="text-gray-400">不确定度:</span>
-                        <span className="font-mono">
-                            {record.uncertainty || 0}%
-                        </span>
+                        <span className="text-gray-400">浓度:</span>
+                        {/* V5: 0~1 float，直接显示 0.0000045 很难读，改用 4.5e-6 这种紧凑写法 */}
+                        <Tooltip title={record.concentration ?? "-"}>
+                            <span className="cursor-help tabular-nums">
+                                {formatScientific(record.concentration)}
+                            </span>
+                        </Tooltip>
                     </div>
                     <div className="flex justify-between w-full">
-                        <span className="text-gray-400">质量浓度:</span>
-                        <span className="font-mono">
-                            {record.mass_concentration || 0}%
-                        </span>
+                        <span className="text-gray-400">不确定度:</span>
+                        <Tooltip title={record.uncertainty ?? "-"}>
+                            <span className="cursor-help tabular-nums">
+                                {formatScientific(record.uncertainty)}
+                            </span>
+                        </Tooltip>
                     </div>
                 </div>
             ),
@@ -227,13 +236,11 @@ const ReferenceMaterialList = () => {
                     mediumOptions.find((m) => m.id === record.medium_type_id)
                         ?.name ||
                     "无";
+                // V5: 响应删除 medium_concentration —— 本列只剩介质名称
                 return (
-                    <div className="text-xs space-y-0.5">
+                    <div className="text-sm">
                         <div className="font-medium text-blue-600 truncate">
                             {mediumName}
-                        </div>
-                        <div className="text-gray-500">
-                            浓度: {record.medium_concentration || 0}%
                         </div>
                     </div>
                 );
@@ -287,20 +294,8 @@ const ReferenceMaterialList = () => {
                             使用
                         </Button>
                     </Tooltip>
-                    <Tooltip title="成分管理">
-                        <Button
-                            type="link"
-                            size="small"
-                            className="text-orange-500"
-                            icon={<SettingOutlined className="w-4 h-4" />}
-                            onClick={() => {
-                                setActiveRecord(record);
-                                setComponentModalVisible(true);
-                            }}
-                        >
-                            成分
-                        </Button>
-                    </Tooltip>
+                    {/* V5: 「成分」入口已移除 —— 成分含量表属于标准样品(ReferenceSample)，
+                        请到「标准样品管理」页面维护 */}
                 </Space>
             ),
         },
@@ -343,34 +338,10 @@ const ReferenceMaterialList = () => {
                 </div>
             </div>
 
-            {(record.components?.length > 0 || record.sources?.length > 0) && (
+            {/* V5: read 不再返回 components 数组（成分功能迁至 ReferenceSample），
+                展开区只保留调配来源 */}
+            {record.sources?.length > 0 && (
                 <div className="grid grid-cols-2 gap-4">
-                    {record.components?.length > 0 && (
-                        <div className="bg-white rounded-lg p-3 border border-slate-200">
-                            <div className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1">
-                                <PlusSquareOutlined className="w-3 h-3 text-emerald-500" />{" "}
-                                组成成分
-                            </div>
-                            <Table
-                                dataSource={record.components}
-                                pagination={false}
-                                size="small"
-                                rowKey="component"
-                                columns={[
-                                    { title: "成分", dataIndex: "component" },
-                                    {
-                                        title: "标准值",
-                                        dataIndex: "value",
-                                        render: (v, r) => `${v}${r.unit}`,
-                                    },
-                                    {
-                                        title: "不确定度",
-                                        dataIndex: "uncertainty",
-                                    },
-                                ]}
-                            />
-                        </div>
-                    )}
                     {record.sources?.length > 0 && (
                         <div className="bg-white rounded-lg p-3 border border-slate-200">
                             <div className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1">
@@ -402,6 +373,8 @@ const ReferenceMaterialList = () => {
         </div>
     );
 
+    // V5: 后端已把 concentration / uncertainty 统一成 0~1 float（最多 8 位小数），
+    //     前端不再做任何换算，表单里的「尾数 × 数量级」拆分由 ScientificInput 内部完成。
     const api = useMemo(
         () => ({
             read: (params) => readReferenceMaterial({ ...params, ...filters }),
@@ -451,19 +424,21 @@ const ReferenceMaterialList = () => {
         setRefreshKey((prev) => prev + 1);
     }, [filters]);
 
+    // V5: 去掉 mass_concentration / medium_concentration，新增必填 concentration；
+    //     lab_code 改为必填，因此加入默认值参与表单归一化
     const initialValues = {
         name: "",
         category: 0,
         stage: 0,
         physical_state: 1,
         medium_type_id: null,
+        lab_code: "",
         specification: 0,
         remaining: 0,
         alert_threshold: 0,
         unit: "mL",
+        concentration: 0,
         uncertainty: 0,
-        mass_concentration: 0,
-        medium_concentration: 0,
     };
 
     const handleRefresh = () => setRefreshKey((prev) => prev + 1);
@@ -562,13 +537,6 @@ const ReferenceMaterialList = () => {
                         </Space>
                     </div>
                 }
-            />
-
-            <ComponentModal
-                visible={componentModalVisible}
-                onCancel={() => setComponentModalVisible(false)}
-                record={activeRecord}
-                onSuccess={handleRefresh}
             />
 
             <PrepareModal

@@ -62,6 +62,15 @@ instance.interceptors.response.use(
         if (status === 0) {
             // Success
             return response;
+        } else if (status === 10) {
+            // V5: 参数校验层错误 —— v5 中更多非法参数落入此类。
+            //     典型场景：Common/Upload/upload 未携带 file 或文件类型非法
+            //     （v4 时该场景返回 101，现由参数校验层提前拦截）。
+            const errorMsg = msg || '参数校验失败：请检查必填项与文件类型是否合法';
+            if (!response.config?._silent) {
+                message.error(errorMsg);
+            }
+            return Promise.reject(new Error(errorMsg));
         } else if (status === 11) { 
             const errorMsg = msg || '用户组不匹配（无权限）';
             if (!response.config?._silent) {
@@ -73,11 +82,15 @@ instance.interceptors.response.use(
             message.warning(errorMsg);
             return Promise.reject(new Error(errorMsg));
         } else if (status === 102) {
-            const errorMsg = msg || '数据库无改动（User.update专用）';
+            // V5: 上传场景下 102 表示"能取到 content_type 但猜不出扩展名"
+            const errorMsg = msg || '数据库无改动，或无法识别上传文件的扩展名';
             message.warning(errorMsg);
             return Promise.reject(new Error(errorMsg));
         } else if (status === 103) {
-            const errorMsg = msg || '数据库无改动（ReferenceMaterial.prepare专用）';
+            // V5: 103 现在有两种来源 —— ①ReferenceMaterial.prepare 的"数据库无改动"；
+            //     ②Common/Upload/upload 完全取不到 content_type（v5 新增的上传错误码）。
+            //     后端 message 能区分具体场景，优先展示它，缺省文案兼顾两者。
+            const errorMsg = msg || '操作未生效：数据库无改动，或上传文件缺少类型信息';
             message.warning(errorMsg);
             return Promise.reject(new Error(errorMsg));
         } else if (status === -1) {

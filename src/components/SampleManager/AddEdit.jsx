@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Input, Space, Select } from "antd";
+import { Input, Space, Select, InputNumber } from "antd";
 
-const AddEdit = ({ record, onChange, apis = {} }) => {
+// V6.1: batchEditable —— 后端只有 WorkflowManager/Sample/update 会真正写入 batch；
+//     TestingManager 和 DepartmentManager 的同名接口收下 batch、返回 status=0，却把值丢掉
+//     （2026-08-26 实测：整条记录原样回传、只改 batch=4，写完读回来仍是 null）。
+//     这两个模块把输入框置灰只读 —— 既不让人白填，也还能看到当前批次是多少。
+//     后端修好之后，把那两个页面的 batchEditable={false} 去掉即可。
+const AddEdit = ({ record, onChange, apis = {}, batchEditable = true }) => {
     const { comboTask } = apis;
     const [errors, setErrors] = useState({});
     const [taskOptions, setTaskOptions] = useState([]);
@@ -124,6 +129,26 @@ const AddEdit = ({ record, onChange, apis = {} }) => {
                         )}
                     </div>
                 )}
+            </div>
+
+            {/* V5: 样品新增批次(batch) —— create 接受可选 batch（≥1，不传为 NULL 未分批）；
+                update 也已由后端支持写入。批量改批次请用样品列表的「设置批次」(batchSet)。 */}
+            {/* V6.1: 后端不写入 batch 的模块置灰只读（见文件顶部注释） */}
+            <div>
+                <div className="mb-2 font-bold text-gray-700">批次号</div>
+                <InputNumber
+                    className="w-full"
+                    min={1}
+                    precision={0}
+                    disabled={!batchEditable}
+                    value={record.batch ?? null}
+                    onChange={(val) => updateField("batch", val ?? null)}
+                />
+                <div className="text-[11px] text-slate-400 mt-1">
+                    {batchEditable
+                        ? "留空表示未分批；如需批量修改可用样品列表的「批量操作」"
+                        : "本模块暂不支持修改批次，请在管理组的样品管理中调整"}
+                </div>
             </div>
 
             <div>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Form, InputNumber, Button, message, Space, Alert } from "antd";
-import { useReferenceMaterial } from "../../api/referenceMaterial";
+import { Modal, Form, InputNumber, message, Alert } from "antd";
+import { useReferenceSample } from "../../api/referenceSample";
 
+// V5: 标准样品领用 —— 请求 { id, used }，后端扣减余量
 const UseModal = ({ visible, onCancel, record, onSuccess }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
@@ -9,10 +10,7 @@ const UseModal = ({ visible, onCancel, record, onSuccess }) => {
     useEffect(() => {
         if (visible && record) {
             form.resetFields();
-            form.setFieldsValue({
-                id: record.id,
-                used: 0,
-            });
+            form.setFieldsValue({ id: record.id, used: 0 });
         }
     }, [visible, record]);
 
@@ -21,6 +19,7 @@ const UseModal = ({ visible, onCancel, record, onSuccess }) => {
             message.warning("使用数量必须大于0");
             return;
         }
+        // V5: 数值字段以字符串形式返回（DECIMAL 转 CHAR），比较前需 Number() 转换
         if (values.used > Number(record.remaining)) {
             message.warning("使用数量不能超过余量");
             return;
@@ -28,13 +27,13 @@ const UseModal = ({ visible, onCancel, record, onSuccess }) => {
 
         try {
             setLoading(true);
-            const res = await useReferenceMaterial(values);
+            const res = await useReferenceSample(values);
             if (res.data.status === 0) {
-                message.success("使用记录成功");
+                message.success("领用记录成功");
                 onSuccess();
                 onCancel();
             } else {
-                message.error(res.data.msg || "记录失败");
+                message.error(res.data.message || "记录失败");
             }
         } catch (error) {
             console.error(error);
@@ -45,8 +44,7 @@ const UseModal = ({ visible, onCancel, record, onSuccess }) => {
 
     return (
         <Modal
-            /* V5: 本模块已收窄为标准溶液/基准试剂 */
-            title={`使用试剂 - ${record?.name}`}
+            title={`领用标准样品 - ${record?.name || ""}`}
             open={visible}
             okText="确定"
             cancelText="取消"
@@ -54,9 +52,10 @@ const UseModal = ({ visible, onCancel, record, onSuccess }) => {
             onOk={() => form.submit()}
             confirmLoading={loading}
             width={500}
+            destroyOnHidden
         >
             <Alert
-                message={`当前余量: ${record?.remaining} ${record?.unit || ""}`}
+                message={`当前余量: ${record?.remaining ?? "-"} ${record?.unit || ""}`}
                 type="info"
                 showIcon
                 className="mb-4"
@@ -67,15 +66,15 @@ const UseModal = ({ visible, onCancel, record, onSuccess }) => {
                 </Form.Item>
                 <Form.Item
                     name="used"
-                    label="使用数量"
-                    rules={[{ required: true, message: "请输入使用数量" }]}
+                    label="领用数量"
+                    rules={[{ required: true, message: "请输入领用数量" }]}
                 >
                     <InputNumber
                         className="w-full"
                         min={0.0001}
                         precision={4}
-                        placeholder="请输入本次使用的数量"
-                        addonAfter={record?.unit || "ml/g"}
+                        placeholder="请输入本次领用的数量"
+                        addonAfter={record?.unit || "g/mL"}
                         autoFocus
                     />
                 </Form.Item>

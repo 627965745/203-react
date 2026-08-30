@@ -25,11 +25,13 @@ import {
     comboReferenceMaterial,
 } from "../../api/referenceMaterial";
 import { comboReferenceMaterialMediumType } from "../../api/referenceMaterialMediumType";
+// V5: 浓度/不确定度是 0~1 float，改用「尾数 × 数量级」两段式输入
+import ScientificInput from "../../components/ScientificInput";
 
+// V5: category 语义变化 —— 0 标准溶液 / 1 基准试剂（原 0「标准物质」迁至 ReferenceSample）
 const CategoryOptions = [
-    { label: "标准物质", value: 0 },
-    { label: "标准溶液", value: 1 },
-    { label: "基准试剂", value: 2 },
+    { label: "标准溶液", value: 0 },
+    { label: "基准试剂", value: 1 },
 ];
 
 const StageOptions = [
@@ -45,7 +47,8 @@ const PhysicalStateOptions = [
     { label: "气态", value: 2 },
 ];
 
-const CategoryMap = { 0: "标准物质", 1: "标准溶液", 2: "基准试剂" };
+// V5: 同上 —— 0 标准溶液 / 1 基准试剂
+const CategoryMap = { 0: "标准溶液", 1: "基准试剂" };
 const StageMap = { 0: "原液", 1: "中间液", 2: "工作液", 3: "标准曲线" };
 const PhysicalStateMap = { 0: "固态", 1: "液态", 2: "气态" };
 
@@ -62,7 +65,8 @@ const PrepareModal = ({ visible, onCancel, onSuccess }) => {
             fetchMediums();
             form.resetFields();
             form.setFieldsValue({
-                category: 1,
+                // V5: 默认「标准溶液」的取值由 1 改为 0
+                category: 0,
                 stage: 1,
                 physical_state: 1,
                 unit: "mL",
@@ -103,6 +107,8 @@ const PrepareModal = ({ visible, onCancel, onSuccess }) => {
             setLoading(true);
             const payload = {
                 ...values,
+                // V5: concentration / uncertainty 已由 ScientificInput 换算成 0~1 float，
+                //     这里直接透传，不再做任何缩放
                 confirmed_at: values.confirmed_at
                     ? values.confirmed_at.format("YYYY-MM-DD")
                     : undefined,
@@ -287,7 +293,14 @@ const PrepareModal = ({ visible, onCancel, onSuccess }) => {
                         />
                     </Form.Item>
 
-                    <Form.Item name="lab_code" label="试剂标签编码">
+                    {/* V5: lab_code 由可空改为必填 */}
+                    <Form.Item
+                        name="lab_code"
+                        label="试剂标签编码"
+                        rules={[
+                            { required: true, message: "请输入试剂标签编码" },
+                        ]}
+                    >
                         <Input />
                     </Form.Item>
                     <Form.Item name="sample_code" label="样品编码">
@@ -326,14 +339,38 @@ const PrepareModal = ({ visible, onCancel, onSuccess }) => {
                         <Input placeholder="g/mL等" />
                     </Form.Item>
 
-                    <Form.Item name="uncertainty" label="不确定度(%)">
-                        <InputNumber className="w-full" min={0} max={100} />
+                    {/* V5: 删除 mass_concentration / medium_concentration；
+                        新增必填 concentration，uncertainty 也改为必填。
+                        两者均为 0~1 float，右侧下拉是 10 的负幂次（非 unit 计量单位）。 */}
+                    <Form.Item
+                        name="concentration"
+                        label="浓度"
+                        rules={[
+                            { required: true, message: "请输入浓度" },
+                            {
+                                type: "number",
+                                min: 0,
+                                max: 1,
+                                message: "浓度需在 0~1 之间",
+                            },
+                        ]}
+                    >
+                        <ScientificInput placeholder="浓度" showActual />
                     </Form.Item>
-                    <Form.Item name="mass_concentration" label="质量浓度(%)">
-                        <InputNumber className="w-full" min={0} max={100} />
-                    </Form.Item>
-                    <Form.Item name="medium_concentration" label="介质浓度(%)">
-                        <InputNumber className="w-full" min={0} max={100} />
+                    <Form.Item
+                        name="uncertainty"
+                        label="不确定度"
+                        rules={[
+                            { required: true, message: "请输入不确定度" },
+                            {
+                                type: "number",
+                                min: 0,
+                                max: 1,
+                                message: "不确定度需在 0~1 之间",
+                            },
+                        ]}
+                    >
+                        <ScientificInput placeholder="相对扩展不确定度" showActual />
                     </Form.Item>
 
                     <Form.Item name="confirmed_at" label="定值日期">

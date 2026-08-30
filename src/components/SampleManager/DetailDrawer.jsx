@@ -64,6 +64,8 @@ import { comboProcessingMethod } from "../../api/processingMethod";
 // V4: 加工分配必须指定加工人（processor_id），需要用户下拉
 import { comboUser } from "../../api/user";
 import dayjs from "dayjs";
+// V6: 结果里的实验时间字段名在写入端/读取端拼写不一致，统一走该 helper 读取
+import { getExperimentedAt } from "../../utils";
 
 // Modals - we'll assume they are in the same directory or passed as props
 import InputModal from "./modals/InputModal";
@@ -678,10 +680,28 @@ const DetailDrawer = ({
                         <span className="text-xl font-black text-slate-800">
                             样品项目与生命周期管理
                         </span>
-                        <span className="text-xs text-slate-400 font-mono mt-1">
-                            {sampleData?.task_lab_code}-
-                            {sampleData?.lab_code?.toString().padStart(4, "0")}{" "}
-                            / {sampleData?.client_code}
+                        <span className="text-xs text-slate-400 font-mono mt-1 flex items-center gap-2">
+                            <span>
+                                {sampleData?.task_lab_code}-
+                                {sampleData?.lab_code
+                                    ?.toString()
+                                    .padStart(4, "0")}{" "}
+                                / {sampleData?.client_code}
+                            </span>
+                            {/* V5: 样品新增批次字段，详情页一并展示 */}
+                            <Tag
+                                color={
+                                    sampleData?.batch == null
+                                        ? "default"
+                                        : "geekblue"
+                                }
+                                bordered={false}
+                                className="m-0 font-bold text-[10px]"
+                            >
+                                {sampleData?.batch == null
+                                    ? "未分批"
+                                    : `第 ${sampleData.batch} 批`}
+                            </Tag>
                         </span>
                     </div>
                 </div>
@@ -1378,6 +1398,26 @@ const DetailDrawer = ({
                                                                                       ) +
                                                                                       "..."
                                                                                     : valStr;
+                                                                            // V6: 结果对象新增实验时间（YYYY-MM-DD 或 null）。标签位置有限，
+                                                                            //     把完整值与实验时间一并放进 Tooltip；只要其中之一需要展示就挂 Tooltip。
+                                                                            //     读取走 getExperimentedAt —— 后端 read 响应实际返回的是
+                                                                            //     exprimented_at（少一个 e），两种拼写都要兼容。
+                                                                            const experimentedAt =
+                                                                                getExperimentedAt(
+                                                                                    r,
+                                                                                );
+                                                                            const tipLines =
+                                                                                [
+                                                                                    valStr.length >
+                                                                                    10
+                                                                                        ? valStr
+                                                                                        : null,
+                                                                                    experimentedAt
+                                                                                        ? `实验时间：${experimentedAt}`
+                                                                                        : null,
+                                                                                ].filter(
+                                                                                    Boolean,
+                                                                                );
                                                                             const tag =
                                                                                 (
                                                                                     <Tag
@@ -1398,8 +1438,8 @@ const DetailDrawer = ({
                                                                                         }
                                                                                     </Tag>
                                                                                 );
-                                                                            return valStr.length >
-                                                                                10 ? (
+                                                                            return tipLines.length >
+                                                                                0 ? (
                                                                                 <Tooltip
                                                                                     key={
                                                                                         r.field_id ||
@@ -1407,7 +1447,23 @@ const DetailDrawer = ({
                                                                                         i
                                                                                     }
                                                                                     title={
-                                                                                        valStr
+                                                                                        <div className="flex flex-col">
+                                                                                            {tipLines.map(
+                                                                                                (
+                                                                                                    line,
+                                                                                                ) => (
+                                                                                                    <span
+                                                                                                        key={
+                                                                                                            line
+                                                                                                        }
+                                                                                                    >
+                                                                                                        {
+                                                                                                            line
+                                                                                                        }
+                                                                                                    </span>
+                                                                                                ),
+                                                                                            )}
+                                                                                        </div>
                                                                                     }
                                                                                 >
                                                                                     {

@@ -14,6 +14,8 @@ import ReagentPage from './pages/Reagent';
 import ReagentStoragePage from './pages/ReagentStorage';
 import ReagentStockPage from './pages/ReagentStock';
 import ReferenceMaterialPage from './pages/ReferenceMaterial';
+// V5: 「标准物质」拆分 —— 新增独立的「标准样品」模块（ReagentAdmin/ReferenceSample）
+import ReferenceSamplePage from './pages/ReferenceSample';
 import ReportCoverPage from './pages/ReportCover';
 import ReportTablePage from './pages/ReportTable';
 import RolePage from './pages/Role';
@@ -71,6 +73,8 @@ const App = () => {
             <Route path="ReagentStorage" element={<ReagentStoragePage />} />
             <Route path="ReagentStock" element={<ReagentStockPage />} />
             <Route path="ReferenceMaterial" element={<ReferenceMaterialPage />} />
+            {/* V5: 新页面「标准样品」。左侧菜单由后端下发，需在角色菜单里新增 path=/ReferenceSample 的条目 */}
+            <Route path="ReferenceSample" element={<ReferenceSamplePage />} />
             <Route path="ReferenceMaterialMediumType" element={<ReferenceMaterialMediumTypePage />} />
             <Route path="ReportCover" element={<ReportCoverPage />} />
             <Route path="ReportTable" element={<ReportTablePage />} />

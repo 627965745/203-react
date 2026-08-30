@@ -16,18 +16,26 @@ import {
     RetweetOutlined,
 } from "@ant-design/icons";
 
+// V6.1: supportsBatch —— 后端只有 WorkflowManager/Sample/reference 会真正写入 batch；
+//     TestingManager 和 DepartmentManager 的同名接口收下 batch、返回 status=0，却把值丢掉
+//     （2026-08-26 实测：传 batch=9，建出来的样品 batch 仍为 null）。
+//     所以这两个模块干脆不显示批次号输入框，免得用户填了以为生效。
+//     后端修好之后，把那两个页面的 supportsBatch={false} 去掉即可。
 const SpecialSampleModal = ({
     open,
     onCancel,
     onSuccess,
     taskId,
     apis = {},
+    supportsBatch = true,
 }) => {
     const {
         referenceSample,
         readSample,
         comboTask,
-        comboReferenceMaterial, // Optional if we want to pass it
+        // V5: 参比样改指「标准样品」—— 下拉数据源由 ReferenceMaterial/combo
+        //     换成 ReferenceSample/combo（宿主页面通过 apis 注入）
+        comboReferenceSample,
     } = apis;
 
     const [form] = Form.useForm();
@@ -57,7 +65,7 @@ const SpecialSampleModal = ({
 
     useEffect(() => {
         if (open && type === 2) {
-            fetchRefMaterials();
+            fetchRefSamples();
         }
         if (open && type === 3 && selectedTaskId) {
             fetchParentSamples(selectedTaskId);
@@ -88,10 +96,11 @@ const SpecialSampleModal = ({
         }
     };
 
-    const fetchRefMaterials = async () => {
+    // V5: 标准样(type=2) 关联的是标准样品(reference_samples)，不再是标准物质
+    const fetchRefSamples = async () => {
         setRefLoading(true);
         try {
-            const res = await comboReferenceMaterial({});
+            const res = await comboReferenceSample({});
             if (res.data.status === 0) {
                 const rawData = res.data.data;
                 const list = Array.isArray(rawData)
@@ -105,7 +114,7 @@ const SpecialSampleModal = ({
                 );
             }
         } catch (error) {
-            console.error("Fetch reference materials error:", error);
+            console.error("Fetch reference samples error:", error);
         } finally {
             setRefLoading(false);
         }
@@ -159,19 +168,23 @@ const SpecialSampleModal = ({
                 return;
             }
             // V4: 按样品类型裁剪互斥字段 —— 后端要求空白样(1) 两个关联ID都为空、
-            //     标准样(2) 只带 reference_material_id、重复样(3) 只带 parent_id。
+            //     标准样(2) 只带参比样ID、重复样(3) 只带 parent_id。
             //     用户切换类型后表单里可能残留上一次的选择，必须在提交前清掉，
             //     否则会命中后端的非法输入校验（V4 中部分此类错误码由 102 调整为 101）。
             // V4: client_code 不再由前端传入，改由后端 helper.frankID() 自动生成。
+            // V5: 请求字段 reference_material_id 改名为 reference_sample_id（指向标准样品）；
+            //     新增可选 batch —— 不填(null)表示未分批，填写则为该批次号(≥1)。
             const payload = {
                 task_id: values.task_id,
                 count: values.count,
                 type: values.type,
                 description: values.description || "",
-                reference_material_id:
-                    values.type === 2 ? values.reference_material_id : null,
+                reference_sample_id:
+                    values.type === 2 ? values.reference_sample_id : null,
                 parent_id: values.type === 3 ? values.parent_id : null,
             };
+            // V6.1: 后端不写入 batch 的模块直接不带该字段
+            if (supportsBatch) payload.batch = values.batch ?? null;
             const res = await referenceSample(payload);
             if (res.data.status === 0) {
                 message.success("添加特殊样品成功");
@@ -268,7 +281,7 @@ const SpecialSampleModal = ({
                     </Form.Item>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className={supportsBatch ? "grid grid-cols-2 gap-4" : ""}>
                     <Form.Item
                         label="创建数量"
                         name="count"
@@ -277,24 +290,39 @@ const SpecialSampleModal = ({
                         <InputNumber min={1} className="w-full" precision={0} />
                     </Form.Item>
 
-                    {/* V4: client_code 由后端 helper.frankID() 自动生成，前端不再提供输入 */}
-                    <div className="flex items-end pb-1">
-                        <span className="text-[11px] text-slate-400 leading-snug">
-                            客户样号由系统自动生成，无需填写
-                        </span>
-                    </div>
+                    {/* V5: 新增批次号 —— 留空表示未分批(NULL)，填写则为该批次(≥1) */}
+                    {/* V6.1: 只在后端确实会写入 batch 的模块显示（见文件顶部注释） */}
+                    {supportsBatch && (
+                        <Form.Item
+                            label="批次号"
+                            name="batch"
+                            tooltip="留空表示未分批；填写后本次创建的全部特殊样品都归入该批次。批次也可事后用「设置批次」批量修改。"
+                        >
+                            <InputNumber
+                                min={1}
+                                precision={0}
+                                className="w-full"
+                            />
+                        </Form.Item>
+                    )}
+                </div>
+
+                {/* V4: client_code 由后端 helper.frankID() 自动生成，前端不再提供输入 */}
+                <div className="text-[11px] text-slate-400 leading-snug -mt-2 mb-2">
+                    客户样号由系统自动生成，无需填写
                 </div>
 
                 <Divider className="my-1" />
 
+                {/* V5: 标准样关联的是「标准样品」(ReferenceSample)，字段名 reference_sample_id */}
                 {type === 2 && (
                     <Form.Item
-                        label="标准物质"
-                        name="reference_material_id"
-                        rules={[{ required: true, message: "请选择标准物质" }]}
+                        label="标准样品"
+                        name="reference_sample_id"
+                        rules={[{ required: true, message: "请选择标准样品" }]}
                     >
                         <Select
-                            placeholder="选择标准物质"
+                            placeholder="选择标准样品"
                             loading={refLoading}
                             options={refOptions}
                             showSearch

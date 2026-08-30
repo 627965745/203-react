@@ -24,13 +24,17 @@ const PhysicalStateMap = {
     2: { label: "气态", color: "purple" }
 };
 
-const CategoryMap = {
+// V6: tasks 表字段改名（纯改名，取值不变）——
+//     category → commission_type（检测类别：0委托检测/1监督检测/2其他）
+//     delivered_by → delivery_type（来样方式：0客户邮寄/1客户送检/2自采）
+//     映射表同步更名，避免与「项目分类」等真正的 category 混淆。
+const CommissionTypeMap = {
     0: { label: "委托检测", color: "cyan" },
     1: { label: "监督检测", color: "red" },
     2: { label: "其他", color: "default" }
 };
 
-const DeliveredByMap = {
+const DeliveryTypeMap = {
     0: { label: "客户邮寄", color: "blue" },
     1: { label: "客户送检", color: "green" },
     2: { label: "自采", color: "orange" }
@@ -151,19 +155,21 @@ const TaskList = () => {
         },
         {
             title: "检测类别",
-            dataIndex: "category",
+            // V6: 列绑定由 category 改为 commission_type（Task/read 响应字段改名）
+            dataIndex: "commission_type",
             width: 100,
             render: (val) => {
-                const item = CategoryMap[val];
+                const item = CommissionTypeMap[val];
                 return item ? <Tag bordered={false} color={item.color}>{item.label}</Tag> : val;
             }
         },
         {
             title: "来样方式",
-            dataIndex: "delivered_by",
+            // V6: 列绑定由 delivered_by 改为 delivery_type（Task/read 响应字段改名）
+            dataIndex: "delivery_type",
             width: 100,
             render: (val) => {
-                const item = DeliveredByMap[val];
+                const item = DeliveryTypeMap[val];
                 return <span className="text-xs text-slate-600">{item?.label || val}</span>;
             }
         },
@@ -213,8 +219,9 @@ const TaskList = () => {
         sample_type_id: null,
         analysis_type_id: null,
         physical_state: 0,
-        category: 0,
-        delivered_by: 1,
+        // V6: 新建任务的默认值随字段改名同步（create/update 请求体用新字段名）
+        commission_type: 0,
+        delivery_type: 1,
         deadline: null,
         receiver_id: null,
         description: ""

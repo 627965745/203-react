@@ -198,9 +198,10 @@ const AddEdit = ({ record, onChange }) => {
                 </Col>
                 <Col span={12}>
                     <div className="mb-1 text-sm font-medium text-gray-700">检测类别 <span className="text-red-500">*</span></div>
+                    {/* V6: 字段改名 category → commission_type（取值不变：0委托/1监督/2其他） */}
                     <Radio.Group 
-                        value={record.category} 
-                        onChange={(e) => updateField("category", e.target.value)}
+                        value={record.commission_type} 
+                        onChange={(e) => updateField("commission_type", e.target.value)}
                     >
                         <Radio value={0}>委托检测</Radio>
                         <Radio value={1}>监督检测</Radio>
@@ -213,9 +214,10 @@ const AddEdit = ({ record, onChange }) => {
             <Row gutter={16}>
                 <Col span={12}>
                     <div className="mb-1 text-sm font-medium text-gray-700">来样方式 <span className="text-red-500">*</span></div>
+                    {/* V6: 字段改名 delivered_by → delivery_type（取值不变：0邮寄/1送检/2自采） */}
                     <Radio.Group
-                        value={record.delivered_by}
-                        onChange={(e) => updateField("delivered_by", e.target.value)}
+                        value={record.delivery_type}
+                        onChange={(e) => updateField("delivery_type", e.target.value)}
                     >
                         <Radio value={0}>客户邮寄</Radio>
                         <Radio value={1}>客户送检</Radio>
